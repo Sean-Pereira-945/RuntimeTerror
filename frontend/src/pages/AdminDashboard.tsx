@@ -26,7 +26,6 @@ const TABS: { key: DashTab; label: string; icon: string }[] = [
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [adminMetrics, setAdminMetrics] = useState<MetricCard[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -39,35 +38,16 @@ export default function AdminDashboard() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Detect sidebar width for main content offset
-  useEffect(() => {
-    const checkSidebar = () => {
-      const sidebar = document.querySelector('aside');
-      if (sidebar) {
-        const w = sidebar.getBoundingClientRect().width;
-        setSidebarCollapsed(w < 100);
-      }
-    };
-    const observer = new MutationObserver(checkSidebar);
-    const sidebar = document.querySelector('aside');
-    if (sidebar) observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
-    checkSidebar();
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div className="min-h-screen dark:bg-slate-950 bg-slate-50 transition-colors duration-300">
       <Sidebar />
 
       {/* Main content */}
-      <main
-        className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-          } p-4 sm:p-6 lg:p-8`}
-      >
+      <main className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className={`mb-8 transition-all duration-500 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="ml-12 lg:ml-0">
+            <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold dark:text-white text-slate-900">
                 Analytics Dashboard
               </h1>

@@ -1,37 +1,13 @@
-import { useState, type ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
-import {
-  FiBarChart2,
-  FiUsers,
-  FiCpu,
-} from 'react-icons/fi';
-
-interface NavItem {
-  label: string;
-  icon: ReactNode;
-  path?: string;
-  active?: boolean;
-}
-
-const ADMIN_NAV: NavItem[] = [
-  { label: 'Dashboard', icon: <FiBarChart2 className="w-5 h-5" /> },
-];
-
-const CLIENT_NAV: NavItem[] = [
-  { label: 'Dashboard', icon: <FiBarChart2 className="w-5 h-5" /> },
-];
+import { FiBarChart2, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const navItems = user?.role === 'admin' ? ADMIN_NAV : CLIENT_NAV;
-  const activeIdx = 0; // Dashboard is always active in this demo
 
   const handleLogout = () => {
     logout();
@@ -39,131 +15,89 @@ export default function Sidebar() {
   };
 
   return (
-    <>
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-xl glass text-white hover:bg-white/10 transition-colors"
-        aria-label="Toggle menu"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {mobileOpen ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
-
-      {/* Overlay for mobile */}
-      {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`
-          fixed top-0 left-0 h-full z-40
-          flex flex-col
-          transition-all duration-300 ease-in-out
-          dark:bg-slate-900/95 bg-white/95
-          backdrop-blur-xl
-          border-r border-white/10 dark:border-white/5
-          ${collapsed ? 'w-20' : 'w-64'}
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        `}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-6 border-b border-white/5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-violet-500/30 flex-shrink-0">
-            FL
+    <header className="sticky top-0 z-50 w-full dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl border-b border-white/10 dark:border-white/5">
+      <div className="flex items-center justify-between px-4 sm:px-6 h-16">
+        {/* Left: logo + nav */}
+        <div className="flex items-center gap-6">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-violet-500/30 flex-shrink-0">
+              FL
+            </div>
+            <div className="hidden sm:block">
+              <div className="font-bold text-sm dark:text-white text-slate-900 leading-tight">FedLearn</div>
+              <div className="text-[10px] text-slate-400 leading-tight">DevHacks 2026</div>
+            </div>
           </div>
-          {!collapsed && (
-            <div className="animate-fade-in">
-              <div className="font-bold text-sm dark:text-white text-slate-900">FedLearn</div>
-              <div className="text-[10px] text-slate-400">DevHacks 2026</div>
-            </div>
-          )}
-          {/* Collapse btn – desktop only */}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:flex ml-auto p-1 rounded-lg hover:bg-white/10 transition-colors dark:text-slate-400 text-slate-500"
-          >
-            <svg className={`w-4 h-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item, idx) => (
-            <button
-              key={item.label}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-                transition-all duration-200 group
-                ${idx === activeIdx
-                  ? 'bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 shadow-md shadow-violet-500/10'
-                  : 'hover:bg-white/5 dark:text-slate-400 text-slate-500 hover:dark:text-white hover:text-slate-800'
-                }
-                ${collapsed ? 'justify-center' : ''}
-              `}
-            >
-              <span className="text-lg flex-shrink-0 flex items-center justify-center">{item.icon}</span>
-              {!collapsed && (
-                <span className="text-sm font-medium">{item.label}</span>
-              )}
-              {idx === activeIdx && !collapsed && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-              )}
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-1">
+            <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium shadow-sm shadow-violet-500/10">
+              <FiBarChart2 className="w-4 h-4" />
+              Dashboard
             </button>
-          ))}
-        </nav>
-
-        {/* Theme toggle */}
-        <div className={`px-4 py-3 border-t border-white/5 ${collapsed ? 'flex justify-center' : ''}`}>
-          {collapsed ? (
-            <ThemeToggle />
-          ) : (
-            <div className="flex items-center justify-between">
-              <span className="text-xs dark:text-slate-500 text-slate-400">Theme</span>
-              <ThemeToggle />
-            </div>
-          )}
+          </nav>
         </div>
 
-        {/* User info + logout */}
-        <div className="px-3 py-4 border-t border-white/5">
-          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+        {/* Right: theme + user + logout */}
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+
+          {/* User pill — desktop */}
+          <div className="hidden sm:flex items-center gap-2.5 pl-3 pr-1 py-1 rounded-full glass">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
               {user?.avatar}
             </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0 animate-fade-in">
-                <div className="text-sm font-medium dark:text-white text-slate-900 truncate">{user?.name}</div>
-                <div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
-              </div>
-            )}
+            <span className="text-xs font-medium dark:text-white text-slate-900 max-w-[120px] truncate">
+              {user?.name}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-full hover:bg-red-500/10 text-red-400 transition-colors"
+              title="Logout"
+            >
+              <FiLogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
+
+          {/* Mobile hamburger */}
           <button
-            onClick={handleLogout}
-            className={`
-              mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-xl
-              text-sm text-red-400 hover:bg-red-500/10 transition-colors
-              ${collapsed ? 'justify-center' : ''}
-            `}
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors dark:text-white text-slate-700"
+            aria-label="Toggle menu"
           >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            {!collapsed && <span>Logout</span>}
+            {mobileOpen ? <FiX className="w-5 h-5" /> : <FiMenu className="w-5 h-5" />}
           </button>
         </div>
-      </aside>
-    </>
+      </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-white/5 px-4 py-3 space-y-3 dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl">
+          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium">
+            <FiBarChart2 className="w-4 h-4" />
+            Dashboard
+          </button>
+          <div className="flex items-center justify-between pt-2 border-t border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-[10px] font-bold">
+                {user?.avatar}
+              </div>
+              <div>
+                <div className="text-xs font-medium dark:text-white text-slate-900">{user?.name}</div>
+                <div className="text-[10px] text-slate-400">{user?.email}</div>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <FiLogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }
