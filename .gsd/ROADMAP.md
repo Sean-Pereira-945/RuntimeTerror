@@ -36,3 +36,7 @@
 ### Phase 6: FL Server Stability & Port Binding Fix
 **Status**: ✅ Complete
 **Objective**: Fix the `Failed to bind to address 127.0.0.1:8080` error occurring when the Streamlit app restarts or triggers the federated learning simulation multiple times. Ensure the background threads and gRPC server are gracefully terminated and the port is freed before attempting to restart the simulation.
+
+### Phase 7: React Frontend & API Integration
+**Status**: ⬜ Not Started
+**Objective**: Integrate the newly provided Vite/React frontend dashboard into the project. Replace the hardcoded `mockData` animations in the React app with live `fetch()` API calls. Develop a lightweight Python backend wrapper (e.g. FastAPI or Flask) to start the Asynchronous FL simulation, fetch training progress, and serve prediction endpoints to the frontend UI.
