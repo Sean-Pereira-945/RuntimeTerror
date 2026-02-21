@@ -7,11 +7,12 @@ Build a privacy-preserving federated learning system that acts as an Amazon/Goog
 
 ## Goals
 1. Support for asynchronous client epochs (random 2-5 epochs per client) using Flower FedAvg.
-2. Implement an LSTM model (Embedding → LSTM → Binary classification) for NLP sentiment analysis.
-3. Simulate 3 distinct client stores with heterogeneous review data (no raw data shared).
-4. Build a Streamlit web app showing a live accuracy plot and live predictions.
-5. Provide a simple user interface: Judge types a review (e.g., "hate this phone") → Instant prediction (e.g., ❌ Negative 92%).
-6. Working prototype with reproducible results.
+2. Implement a Transformer model (HuggingFace) for NLP sentiment analysis. If too complex/slow for the local hardware simulation, fallback to the existing LSTM.
+3. Pretrain the global model on a large-scale text sentiment dataset (at least 20,000 samples) before federated fine-tuning.
+4. Simulate 3 distinct client stores with heterogeneous review data (no raw data shared) for the federated phase.
+5. Build a Streamlit web app showing a live accuracy plot and live predictions.
+6. Provide a user interface where inference strictly occurs to help the client understand the results (model is server-side, but prediction interpretations are returned to the client).
+7. Working prototype with reproducible results.
 
 ## Non-Goals (Out of Scope)
 - Deployment in a real-world production environment (focusing on prototype/simulation)
@@ -25,7 +26,8 @@ Judges and reviewers evaluating the Federated Learning NLP capabilities.
 - Must run in an asynchronous fashion, simulating network/compute delays
 - Data must remain local to 3 specific mock clients
 - **Must use Flower (`flwr==1.0.0`) framework** for the overarching federated learning orchestration.
-- **Must use an LSTM** model architecture.
+- **Must use a Transformer (or fallback LSTM)** model architecture.
+- **Inference logic** must ensure the model lives on the server, but prediction results are strictly returned to the client interface.
 
 ## Success Criteria
 - [ ] 3 clients successfully train locally on text data and send updates asynchronously.
