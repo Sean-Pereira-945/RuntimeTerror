@@ -28,6 +28,7 @@ export default function ContributionRadar() {
   // Normalize each dimension to 0–100 for the radar
   const maxDP = Math.max(...clients.map(c => c.dataPoints), 1);
   const maxRounds = Math.max(...clients.map(c => c.roundsParticipated), 1);
+  const maxContrib = Math.max(...clients.map(c => c.contribution), 1);
 
   const labels = ['Accuracy', 'Data Points', 'Rounds', 'Contribution', 'Uptime'];
 
@@ -37,8 +38,8 @@ export default function ContributionRadar() {
       c.localAccuracy,
       (c.dataPoints / maxDP) * 100,
       (c.roundsParticipated / maxRounds) * 100,
-      c.contribution * 2.5, // scale ~40 → ~100
-      c.uptime ?? 99.0,     // real uptime from backend
+      maxContrib > 0 ? (c.contribution / maxContrib) * 100 : 0,
+      c.uptime ?? 0,
     ],
     backgroundColor: c.color + '30',
     borderColor: c.color,

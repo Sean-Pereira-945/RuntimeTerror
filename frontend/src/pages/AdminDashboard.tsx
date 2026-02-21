@@ -78,13 +78,13 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="dark:text-emerald-400 text-emerald-600 font-medium">All Systems Online</span>
+                <span className="dark:text-emerald-400 text-emerald-600 font-medium">{clients.length > 0 ? `${clients.filter(c => c.status === 'active').length}/${clients.length} Clients Active` : 'Loading…'}</span>
               </div>
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs dark:text-slate-400 text-slate-500">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Last updated: just now
+                Last updated: {new Date().toLocaleTimeString()}
               </div>
             </div>
           </div>

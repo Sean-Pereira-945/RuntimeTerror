@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { fetchHistory } from '../../api';
-import type { TrainingRound } from '../../data/mockData';
+import { fetchHistory, fetchClients } from '../../api';
+import type { TrainingRound, Client } from '../../data/mockData';
 
 export default function TrainingHistoryTable() {
   const [trainingHistory, setTrainingHistory] = useState<TrainingRound[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
     fetchHistory().then(res => setTrainingHistory(res.trainingHistory || []));
+    fetchClients().then(res => setClients(res.clients || []));
   }, []);
 
   return (
@@ -67,15 +69,18 @@ export default function TrainingHistoryTable() {
                 </td>
                 <td className="py-3 px-3 hidden sm:table-cell">
                   <div className="flex -space-x-1">
-                    {Array.from({ length: row.participants }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-5 h-5 rounded-full border-2 border-slate-900/50 flex items-center justify-center text-[8px] font-bold text-white"
-                        style={{ backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899'][i] }}
-                      >
-                        {['A', 'B', 'C'][i]}
-                      </div>
-                    ))}
+                    {Array.from({ length: row.participants }).map((_, i) => {
+                      const client = clients[i];
+                      return (
+                        <div
+                          key={i}
+                          className="w-5 h-5 rounded-full border-2 border-slate-900/50 flex items-center justify-center text-[8px] font-bold text-white"
+                          style={{ backgroundColor: client?.color || '#6366f1' }}
+                        >
+                          {client?.shortName?.[0] || String.fromCharCode(65 + i)}
+                        </div>
+                      );
+                    })}
                   </div>
                 </td>
                 <td className="py-3 px-3 hidden md:table-cell">

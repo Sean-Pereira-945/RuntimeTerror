@@ -12,7 +12,7 @@ import type {
 import type { MetricCard, Client, TrainingRound } from './data/mockData';
 import { getAuthHeaders } from './context/AuthContext';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 /** Merge auth headers with any additional headers */
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {

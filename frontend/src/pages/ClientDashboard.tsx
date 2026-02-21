@@ -126,11 +126,8 @@ export default function ClientDashboard() {
     }, 200);
 
     try {
-      // For demo, we parse exact store names to align with nlp_data.py expected "Phone", "Clothing", "Food"
-      let storeName = 'Phone';
-      const userOrg = user?.org || '';
-      if (userOrg.includes('Clothing') || userOrg.includes('BioTech')) storeName = 'Clothing';
-      if (userOrg.includes('Food') || userOrg.includes('Stanford')) storeName = 'Food';
+      // Use the user's org directly as the store name, defaulting to org or 'default'
+      const storeName = user?.org || 'default';
 
       await uploadClientData(storeName, file);
 
