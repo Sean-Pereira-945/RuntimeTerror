@@ -1,5 +1,9 @@
-from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from collections import defaultdict
+import time
 from pydantic import BaseModel
 import subprocess
 import os
@@ -53,6 +57,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class RateLimiterMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app):
+        super().__init__(app)
+        self.rate_limit_records = defaultdict(list)
+        
+    async def dispatch(self, request: Request, call_next):
+        ip = request.client.host if request.client else "127.0.0.1"
+        now = time.time()
+        
+        self.rate_limit_records[ip] = [t for t in self.rate_limit_records[ip] if now - t < 1.0]
+        
+        if len(self.rate_limit_records[ip]) > 10:
+            return JSONResponse(status_code=429, content={"detail": "Too Many Requests - DDoS Protection triggered"})
+            
+        self.rate_limit_records[ip].append(now)
+        return await call_next(request)
+
+app.add_middleware(RateLimiterMiddleware)
 
 class PredictRequest(BaseModel):
     text: str

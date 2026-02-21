@@ -7,7 +7,7 @@ from collections import OrderedDict
 import random
 
 class NLPClient(fl.client.NumPyClient):
-    def __init__(self, client_id, store_name, model, dataset, batch_size=32, lr=0.01, device='cpu'):
+    def __init__(self, client_id, store_name, model, dataset, batch_size=32, lr=0.01, device='cpu', low_compute_proxy=False, extra_columns=0):
         self.client_id = client_id
         self.store_name = store_name
         self.device = device
@@ -16,15 +16,20 @@ class NLPClient(fl.client.NumPyClient):
         self.model = model.to(self.device)
         self.dataset = dataset
         self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        self.low_compute_proxy = low_compute_proxy
+        self.extra_columns = extra_columns
+        self.heterogeneity_layer = nn.Linear(extra_columns, 10).to(self.device) if extra_columns > 0 else None
         
     def get_parameters(self, config):
         """Return model weights as a list of NumPy ndarrays."""
-        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+        import numpy as np
+        return [val.cpu().numpy().astype(np.float16) for _, val in self.model.state_dict().items()]
 
     def set_parameters(self, parameters):
         """Set model parameters from a list of NumPy ndarrays."""
+        import numpy as np
         params_dict = zip(self.model.state_dict().keys(), parameters)
-        state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
+        state_dict = OrderedDict({k: torch.tensor(v.astype(np.float32) if hasattr(v, 'astype') else v).float() for k, v in params_dict})
         self.model.load_state_dict(state_dict, strict=True)
         
     def fit(self, parameters, config):
@@ -34,9 +39,13 @@ class NLPClient(fl.client.NumPyClient):
         # Asynchronous/Random Epoch simulation (Requirement #3)
         # We ignore config["epochs"] and pick randomly between 2 and 5.
         epochs = random.randint(2, 5)
-        print(f"[Client {self.store_name}] Training for {epochs} epochs...")
         
-        self.train(epochs)
+        if self.low_compute_proxy:
+            print(f"[Client {self.store_name}] Low compute proxy mode: bypassing local training.")
+        else:
+            print(f"[Client {self.store_name}] Training for {epochs} epochs...")
+            self.train(epochs)
+            
         return self.get_parameters(config={}), len(self.dataset), {}
         
     def evaluate(self, parameters, config):

@@ -54,6 +54,7 @@ export default function ClientDashboard() {
   const [dynamicCurve, setDynamicCurve] = useState<number[]>([]);
   const [dynamicLabels, setDynamicLabels] = useState<string[]>([]);
   const [personalData, setPersonalData] = useState<ClientPersonalData | null>(null);
+  const [improvementDelta, setImprovementDelta] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -65,6 +66,7 @@ export default function ClientDashboard() {
           setDynamicAccuracy(data.localAccuracy);
           setDynamicRounds(data.roundsTrained);
           setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
+          setImprovementDelta(data.curve.length > 1 ? data.localAccuracy - data.curve[0] : 0);
         }
       } catch (e) {
         console.error("Failed to fetch live client metrics", e);
@@ -276,9 +278,10 @@ export default function ClientDashboard() {
         </div>
 
         {/* Status + Quick Metrics */}
-        <div className={`grid sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div className={`grid sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {[
             { label: 'Local Accuracy', value: dynamicAccuracy + '%', icon: <FiTarget className="w-5 h-5" />, color: 'from-blue-500 to-cyan-400' },
+            { label: 'Improvement on Self Model', value: `+${improvementDelta.toFixed(1)}%`, icon: <FiTarget className="w-5 h-5" />, color: 'from-emerald-500 to-green-400' },
             { label: 'Dataset Size', value: (personalData?.datasetSize ?? 0).toLocaleString(), icon: <FiDatabase className="w-5 h-5" />, color: 'from-violet-500 to-purple-400' },
             { label: 'Rounds Trained', value: String(dynamicRounds), icon: <FiRefreshCw className="w-5 h-5" />, color: 'from-pink-500 to-rose-400' },
             { label: 'Model Version', value: personalData?.modelVersion ?? 'v0.0', icon: <FiCpu className="w-5 h-5" />, color: 'from-amber-500 to-orange-400' },

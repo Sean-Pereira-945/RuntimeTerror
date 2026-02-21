@@ -14,8 +14,10 @@ from flwr.server.client_proxy import ClientProxy
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GLOBAL_MODEL_PATH = os.path.join(BACKEND_DIR, "global_model.pth")
 
-class SaveMetricsStrategy(fl.server.strategy.FedAvg):
+class SaveMetricsStrategy(fl.server.strategy.FedProx):
     def __init__(self, *args, **kwargs):
+        if "proximal_mu" not in kwargs:
+            kwargs["proximal_mu"] = 0.1
         super().__init__(*args, **kwargs)
         self.metrics_file = os.path.join(BACKEND_DIR, "data", "fl_metrics.json")
         os.makedirs(os.path.dirname(self.metrics_file), exist_ok=True)
@@ -49,10 +51,43 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
         
         self._round_start_time = time.time()
         
+        # Fall tolerance checks
+        if not results and failures:
+            print(f"[Round {server_round}] All clients failed or none returned. Failures: {failures}")
+            # Fallback to last known aggregated parameters
+            return None, {}
+            
         # Register client IDs during fit
         for client, _ in results:
             self._get_sequential_id(client.cid)
         
+        # Malicious Update Filtering using Median Absolute Deviation or simple L2 norm thresholding
+        if results:
+            valid_results = []
+            param_norms = []
+            
+            # Extract parameters and compute L2 norm
+            for client, fit_res in results:
+                ndarrays = parameters_to_ndarrays(fit_res.parameters)
+                norm = np.sqrt(sum(np.sum(np.square(x)) for x in ndarrays))
+                param_norms.append(norm)
+                
+            median_norm = np.median(param_norms)
+            
+            for (client, fit_res), norm in zip(results, param_norms):
+                # If norm is > 3x the median norm, consider it malicious/poisoned
+                if norm > 3 * median_norm and median_norm > 0:
+                    print(f"⚠️ [Round {server_round}] Filtered malicious client {client.cid} (Norm: {norm:.2f} > 3x Median: {median_norm:.2f})")
+                else:
+                    valid_results.append((client, fit_res))
+            
+            results = valid_results
+            
+            # If all results were filtered out
+            if not results:
+                print(f"⚠️ [Round {server_round}] All client updates were filtered as malicious!")
+                return None, {}
+                
         aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
         
         if aggregated_parameters is not None:
