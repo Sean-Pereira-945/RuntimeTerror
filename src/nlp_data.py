@@ -2,9 +2,12 @@ import torch
 from torch.utils.data import Dataset
 import random
 
+from transformers import DistilBertTokenizer
+
 # Fixed vocabulary size for the simplistic tokenizer
-VOCAB_SIZE = 1000
-MAX_LENGTH = 50
+# We're now delegating to HuggingFace DistilBertTokenizer
+MAX_LENGTH = 64
+tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 
 class ReviewDataset(Dataset):
     def __init__(self, texts, labels, max_length=MAX_LENGTH):
@@ -16,16 +19,21 @@ class ReviewDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        # A very basic hashing tokenizer
-        tokens = [abs(hash(word)) % VOCAB_SIZE for word in self.texts[idx].split()]
+        # We now use the Transformer pre-trained tokenizer
+        encoding = tokenizer(
+            self.texts[idx],
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt"
+        )
         
-        # Pad or truncate
-        if len(tokens) > self.max_length:
-            tokens = tokens[:self.max_length]
-        else:
-            tokens = tokens + [0] * (self.max_length - len(tokens))
-            
-        return torch.tensor(tokens, dtype=torch.long), torch.tensor(self.labels[idx], dtype=torch.long)
+        # Squeeze the tensor because tokenizer returns batch dim even for single items
+        input_ids = encoding["input_ids"].squeeze(0)
+        attention_mask = encoding["attention_mask"].squeeze(0)
+        label = torch.tensor(self.labels[idx], dtype=torch.long)
+        
+        return input_ids, attention_mask, label
 
 def generate_synthetic_reviews(store_name, num_samples=1000):
     positive_templates = [
@@ -75,5 +83,6 @@ def get_store_dataset(store_name, num_samples=1000):
 if __name__ == "__main__":
     ds = get_store_dataset("Phone", num_samples=10)
     print("Sample generated for Phone store:")
-    print("Tokens:", ds[0][0])
-    print("Label:", ds[0][1])
+    print("Input IDs:", ds[0][0])
+    print("Attention Mask:", ds[0][1])
+    print("Label:", ds[0][2])

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 from src.nlp_client import NLPClient
-from src.nlp_model import ReviewLSTM
+from src.transformer_model import TransformerWrapper
 from src.nlp_data import get_store_dataset
 
 def run_server(num_clients):
@@ -21,19 +21,20 @@ def run_server(num_clients):
     # We will save the model weights after the simulation in the main thread
     fl.server.start_server(
         server_address="127.0.0.1:8080",
-        config=fl.server.ServerConfig(num_rounds=3),
+        config=fl.server.ServerConfig(num_rounds=2), # Run 2 rounds for demo speed instead of 3
         strategy=strategy,
     )
 
 def run_client(client_id, store_name, dataset, device):
     time.sleep(2 + client_id) # Stagger starts to allow server to boot
-    model = ReviewLSTM()
+    # Load model with 20k pretrained weights from Wave 1
+    model = TransformerWrapper("pretrained_transformer.pth")
     client = NLPClient(
         client_id=client_id,
         store_name=store_name,
         model=model,
         dataset=dataset,
-        lr=0.01,
+        lr=2e-5, # Lower learning rate for Transformer fine tuning
         device=device
     )
     fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)

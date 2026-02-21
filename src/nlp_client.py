@@ -52,10 +52,10 @@ class NLPClient(fl.client.NumPyClient):
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         
         for epoch in range(epochs):
-            for data, target in self.dataloader:
-                data, target = data.to(self.device), target.to(self.device)
+            for input_ids, attention_mask, target in self.dataloader:
+                input_ids, attention_mask, target = input_ids.to(self.device), attention_mask.to(self.device), target.to(self.device)
                 optimizer.zero_grad()
-                output = self.model(data)
+                output = self.model(input_ids, attention_mask)
                 loss = criterion(output, target)
                 loss.backward()
                 optimizer.step()
@@ -67,12 +67,13 @@ class NLPClient(fl.client.NumPyClient):
         correct = 0
         criterion = nn.CrossEntropyLoss(reduction='sum')
         with torch.no_grad():
-            for data, target in self.dataloader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.model(data)
+            for input_ids, attention_mask, target in self.dataloader:
+                input_ids, attention_mask, target = input_ids.to(self.device), attention_mask.to(self.device), target.to(self.device)
+                output = self.model(input_ids, attention_mask)
                 loss += criterion(output, target).item()
                 pred = output.argmax(dim=1, keepdim=True)
                 correct += pred.eq(target.view_as(pred)).sum().item()
+        
         
         loss /= len(self.dataset)
         accuracy = correct / len(self.dataset)
