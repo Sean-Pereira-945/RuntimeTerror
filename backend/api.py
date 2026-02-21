@@ -440,9 +440,9 @@ DEFAULT_BOTS = {
 }
 
 DEFAULT_EMAIL_CONFIG = {
-    "enabled": True,
-    "address": "train@fedlearn.devhacks2026.app",
-    "provider": "SendGrid",
+    "enabled": False,
+    "address": "",
+    "provider": "",
     "format": "csv_attachment",
 }
 

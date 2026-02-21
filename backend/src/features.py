@@ -201,8 +201,8 @@ def bot_test_command(command: str) -> Dict:
 
 DEFAULT_EMAIL_CONFIG = {
     "enabled": True,
-    "address": "train@fedlearn.devhacks2026.app",
-    "provider": "SendGrid",
+    "address": "",
+    "provider": "",
     "format": "csv_attachment",
 }
 
