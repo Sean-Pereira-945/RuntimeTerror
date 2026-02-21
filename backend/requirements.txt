@@ -7,3 +7,5 @@ matplotlib
 streamlit
 transformers
 datasets
+fastapi
+uvicorn
