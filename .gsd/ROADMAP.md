@@ -14,7 +14,7 @@
 ## Phases
 
 ### Phase 1: Foundation and Simulation Setup
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Establish the basic federated learning simulation environment with a central server, multiple clients, and heterogeneous data partitioning.
 
 ### Phase 2: Asynchronous Updates
