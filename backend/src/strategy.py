@@ -13,6 +13,26 @@ from flwr.server.client_proxy import ClientProxy
 # Resolve paths relative to backend/ directory
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GLOBAL_MODEL_PATH = os.path.join(BACKEND_DIR, "global_model.pth")
+STATUS_FILE = os.path.join(BACKEND_DIR, "data", "training_status.json")
+
+
+def _update_training_status(server_round: int, total_rounds: int, accuracy: float, loss: float):
+    """Write per-round training progress so the API can serve it."""
+    try:
+        data = {
+            "status": "running",
+            "currentRound": server_round,
+            "totalRounds": total_rounds,
+            "accuracy": round(accuracy * 100, 1),
+            "loss": round(loss, 4),
+            "message": f"Round {server_round}/{total_rounds} complete — {accuracy*100:.1f}% accuracy",
+            "ts": time.time(),
+        }
+        os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
+        with open(STATUS_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[Strategy] Failed to write training status: {e}")
 
 class SaveMetricsStrategy(fl.server.strategy.FedAvg):
     def __init__(self, *args, **kwargs):
@@ -128,5 +148,9 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
                 json.dump(data, f, indent=2)
             
             print(f"[Round {server_round}] Global accuracy: {global_accuracy*100:.1f}%, Loss: {aggregated_loss:.4f}, Duration: {duration_s:.1f}s")
+
+            # Update training status for the API to serve
+            from src.main import NUM_ROUNDS
+            _update_training_status(server_round, NUM_ROUNDS, global_accuracy, aggregated_loss)
 
         return aggregated_loss, aggregated_metrics

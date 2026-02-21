@@ -83,16 +83,36 @@ export async function predictSentiment(text: string) {
 }
 
 export async function startTraining() {
+    const response = await fetch(`${API_BASE_URL}/api/train`, {
+        method: "POST",
+        headers: authHeaders(),
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Training failed' }));
+        throw new Error(err.detail || 'Failed to start training');
+    }
+    return await response.json();
+}
+
+export interface TrainingStatus {
+    status: 'idle' | 'starting' | 'running' | 'completed' | 'failed';
+    currentRound?: number;
+    totalRounds?: number;
+    accuracy?: number;
+    loss?: number;
+    message?: string;
+    ts?: number;
+}
+
+export async function fetchTrainingStatus(): Promise<TrainingStatus> {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/train`, {
-            method: "POST",
+        const response = await fetch(`${API_BASE_URL}/api/train/status`, {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Network error');
         return await response.json();
-    } catch (error) {
-        console.warn("Backend unreachable for training");
-        throw error;
+    } catch {
+        return { status: 'idle' };
     }
 }
 

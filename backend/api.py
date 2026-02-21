@@ -289,18 +289,52 @@ def predict(req: PredictRequest, user: dict = Depends(get_current_user)):
     return predict_sentiment(req.text)
 
 
+# ── Training status file ──────────────────────────────────────────────
+_TRAINING_STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "training_status.json")
+
+def _read_training_status() -> dict:
+    """Read the current training status from the shared JSON file."""
+    try:
+        with open(_TRAINING_STATUS_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"status": "idle"}
+
+def _write_training_status(data: dict):
+    os.makedirs(os.path.dirname(_TRAINING_STATUS_FILE), exist_ok=True)
+    with open(_TRAINING_STATUS_FILE, "w") as f:
+        json.dump(data, f)
+
+
 def run_fl_background():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     try:
         subprocess.run(["python", "-m", "src.main"], check=True, cwd=backend_dir)
+        # Sync new metrics into the database after training completes
+        sync_json_metrics_to_db()
     except subprocess.CalledProcessError as e:
         print(f"Simulation failed: {e}")
+        _write_training_status({"status": "failed", "message": str(e)})
+    except Exception as e:
+        print(f"Simulation error: {e}")
+        _write_training_status({"status": "failed", "message": str(e)})
 
 
 @app.post("/api/train")
-def train(background_tasks: BackgroundTasks, admin: dict = Depends(require_role("admin"))):
+def train(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    # Prevent starting if already running
+    current = _read_training_status()
+    if current.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Training is already in progress")
+    _write_training_status({"status": "starting", "message": "Launching FL simulation..."})
     background_tasks.add_task(run_fl_background)
     return {"status": "Training started in background"}
+
+
+@app.get("/api/train/status")
+def train_status(user: dict = Depends(get_current_user)):
+    """Return the current training progress from the shared status file."""
+    return _read_training_status()
 
 
 @app.post("/api/upload-preview")

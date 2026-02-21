@@ -1,5 +1,6 @@
 import multiprocessing
 import time
+import json
 import flwr as fl
 import torch
 import os
@@ -12,9 +13,18 @@ from src.strategy import SaveMetricsStrategy
 # Resolve paths relative to backend/ directory
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRETRAINED_PATH = os.path.join(BACKEND_DIR, "pretrained_transformer.pth")
+STATUS_FILE = os.path.join(BACKEND_DIR, "data", "training_status.json")
 
 NUM_ROUNDS = 10
 SERVER_ADDRESS = "127.0.0.1:8080"
+
+
+def _write_status(status: str, **extra):
+    """Write training status to a JSON file for the API to read."""
+    os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
+    data = {"status": status, "ts": time.time(), **extra}
+    with open(STATUS_FILE, "w") as f:
+        json.dump(data, f)
 
 def run_server(num_clients):
     strategy = SaveMetricsStrategy(
@@ -65,6 +75,7 @@ def run_client_process(cid):
 
 def execute_simulation():
     print(f"Starting FL Simulation: {NUM_ROUNDS} rounds, 3 clients, server at {SERVER_ADDRESS}")
+    _write_status("running", currentRound=0, totalRounds=NUM_ROUNDS, message="Initializing FL server...")
     
     num_clients = 3
     
@@ -89,7 +100,8 @@ def execute_simulation():
         print("Warning: Server process still running, terminating...")
         server_process.terminate()
         server_process.join(timeout=10)
-        
+    
+    _write_status("completed", currentRound=NUM_ROUNDS, totalRounds=NUM_ROUNDS, message="All rounds complete!")
     print(f"FL Simulation Complete! {NUM_ROUNDS} rounds finished. ✅")
     
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { startTraining as apiStartTraining, uploadPreview, finalizeUpload } from '../api';
-import type { UploadPreview } from '../api';
+import { startTraining as apiStartTraining, uploadPreview, finalizeUpload, fetchTrainingStatus } from '../api';
+import type { UploadPreview, TrainingStatus as TrainingStat } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -157,28 +157,60 @@ export default function ClientDashboard() {
     }
   };
 
+  const [trainMsg, setTrainMsg] = useState<string>('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
   const startTraining = async () => {
     setStatus('training');
     setProgress(0);
+    setTrainMsg('Launching FL simulation...');
     try {
       await apiStartTraining();
-    } catch (e) {
-      console.warn("API failed, simulating training");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to start training';
+      setTrainMsg(msg);
+      setStatus('idle');
+      return;
     }
 
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.random() * 3 + 1;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
-        setProgress(100);
-        setStatus('complete');
-        fireConfetti();
-        setTimeout(() => setStatus('idle'), 4000);
-      }
-      setProgress(Math.min(p, 100));
-    }, 150);
+    // Poll backend for real training progress
+    pollRef.current = setInterval(async () => {
+      try {
+        const st: TrainingStat = await fetchTrainingStatus();
+        if (st.status === 'running' && st.totalRounds) {
+          const pct = Math.round((st.currentRound ?? 0) / st.totalRounds * 100);
+          setProgress(pct);
+          setTrainMsg(st.message ?? `Round ${st.currentRound}/${st.totalRounds}`);
+        } else if (st.status === 'completed') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setProgress(100);
+          setTrainMsg('Training complete — model aggregated!');
+          setStatus('complete');
+          fireConfetti();
+          // Refresh personal data to show new accuracy
+          try {
+            const data = await fetchClientPersonal();
+            setPersonalData(data);
+            if (data.curve.length > 0) {
+              setDynamicCurve(data.curve);
+              setDynamicAccuracy(data.localAccuracy);
+              setDynamicRounds(data.roundsTrained);
+              setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
+            }
+          } catch { /* ignore refresh error */ }
+          setTimeout(() => setStatus('idle'), 4000);
+        } else if (st.status === 'failed') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setTrainMsg(st.message ?? 'Training failed');
+          setStatus('idle');
+        }
+      } catch { /* silently retry next poll */ }
+    }, 2000);
   };
 
   const personalChartData = {
@@ -449,7 +481,7 @@ export default function ClientDashboard() {
               {status === 'training' && (
                 <div className="mb-4 animate-fade-in">
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-xs dark:text-slate-400 text-slate-500">Processing local dataset...</span>
+                    <span className="text-xs dark:text-slate-400 text-slate-500 truncate max-w-[220px]">{trainMsg || 'Starting...'}</span>
                     <span className="text-xs font-mono text-violet-400">{Math.round(progress)}%</span>
                   </div>
                   <div className="w-full h-3 rounded-full bg-white/5 overflow-hidden">
