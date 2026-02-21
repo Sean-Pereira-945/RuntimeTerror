@@ -4,6 +4,8 @@ from datetime import datetime
 import flwr as fl
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Union
+import torch
+from src.transformer_model import TransformerWrapper
 from flwr.common import FitRes, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
 
@@ -15,6 +17,40 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
         # Initialize or clear
         with open(self.metrics_file, "w") as f:
             json.dump([], f)
+
+    def aggregate_fit(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, FitRes]],
+        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
+    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+        
+        aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
+        
+        if aggregated_parameters is not None:
+            # Convert Flower Parameters back to NumPy arrays
+            ndarrays = parameters_to_ndarrays(aggregated_parameters)
+            
+            # Load the base model structure to inject weights
+            model = TransformerWrapper()
+            
+            # Get the current state_dict, which gives us the keys and shapes of PyTorch tensors
+            state_dict = model.state_dict()
+            
+            # Map NumPy arrays back to PyTorch Tensors based on the state_dict ordered architecture
+            # NOTE: We assume the client side `get_parameters` yielded them in exactly deterministic order
+            keys = list(state_dict.keys())
+            for key, array in zip(keys, ndarrays):
+                state_dict[key] = torch.tensor(array)
+            
+            # Update the base model structure with the federated weights
+            model.load_state_dict(state_dict, strict=True)
+            
+            # Persist dynamically so inference endpoints pick it up natively
+            torch.save(model.state_dict(), "global_model.pth")
+            
+        return aggregated_parameters, aggregated_metrics
+
 
     def aggregate_evaluate(
         self,

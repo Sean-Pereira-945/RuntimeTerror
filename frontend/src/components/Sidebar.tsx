@@ -17,8 +17,6 @@ interface NavItem {
 
 const ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard', icon: <FiBarChart2 className="w-5 h-5" /> },
-  { label: 'Clients', icon: <FiUsers className="w-5 h-5" /> },
-  { label: 'Models', icon: <FiCpu className="w-5 h-5" /> },
 ];
 
 const CLIENT_NAV: NavItem[] = [

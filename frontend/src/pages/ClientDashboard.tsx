@@ -26,9 +26,9 @@ import {
 import {
   clientPersonalMetrics,
   recentUploads,
-  clientAccuracyCurves,
   roundLabels,
 } from '../data/mockData';
+import { fetchMetrics, fetchClients } from '../api';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
@@ -49,10 +49,39 @@ export default function ClientDashboard() {
   const [inferenceResult, setInferenceResult] = useState<{ label: string; confidence: number } | null>(null);
   const [inferring, setInferring] = useState(false);
 
+  const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(clientPersonalMetrics.localAccuracy);
+  const [dynamicRounds, setDynamicRounds] = useState<number>(clientPersonalMetrics.roundsTrained);
+  const [dynamicCurve, setDynamicCurve] = useState<number[]>([]);
+  const [dynamicLabels, setDynamicLabels] = useState<string[]>(roundLabels);
+
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const metricsRes = await fetchMetrics();
+        const clientsRes = await fetchClients();
+
+        let storeName = 'Phone';
+        const userOrg = user?.org || '';
+        if (userOrg.includes('Clothing') || userOrg.includes('BioTech')) storeName = 'Clothing';
+        if (userOrg.includes('Food') || userOrg.includes('Stanford')) storeName = 'Food';
+
+        if (clientsRes.clientAccuracyCurves && clientsRes.clientAccuracyCurves[storeName]) {
+          const curve = clientsRes.clientAccuracyCurves[storeName];
+          if (curve.length > 0) {
+            setDynamicCurve(curve);
+            setDynamicAccuracy(curve[curve.length - 1]);
+            setDynamicRounds(curve.length);
+            setDynamicLabels(curve.map((_: any, i: number) => `Round ${i + 1}`));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch live client metrics", e);
+      }
+    };
+    fetchData();
     const timer = setTimeout(() => setLoaded(true), 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const checkSidebar = () => {
@@ -107,8 +136,9 @@ export default function ClientDashboard() {
     try {
       // For demo, we parse exact store names to align with nlp_data.py expected "Phone", "Clothing", "Food"
       let storeName = 'Phone';
-      if (user?.org.includes('Clothing') || user?.org.includes('BioTech')) storeName = 'Clothing';
-      if (user?.org.includes('Food') || user?.org.includes('Stanford')) storeName = 'Food';
+      const userOrg = user?.org || '';
+      if (userOrg.includes('Clothing') || userOrg.includes('BioTech')) storeName = 'Clothing';
+      if (userOrg.includes('Food') || userOrg.includes('Stanford')) storeName = 'Food';
 
       await uploadClientData(storeName, file);
 
@@ -147,11 +177,11 @@ export default function ClientDashboard() {
   };
 
   const personalChartData = {
-    labels: roundLabels,
+    labels: dynamicLabels.length > 0 ? dynamicLabels : roundLabels,
     datasets: [
       {
         label: 'Your Local Accuracy',
-        data: clientAccuracyCurves['Hospital A'],
+        data: dynamicCurve.length > 0 ? dynamicCurve : [],
         borderColor: '#3b82f6',
         backgroundColor: (ctx: { chart: ChartJS }) => {
           const chart = ctx.chart;
@@ -256,9 +286,9 @@ export default function ClientDashboard() {
         {/* Status + Quick Metrics */}
         <div className={`grid sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {[
-            { label: 'Local Accuracy', value: clientPersonalMetrics.localAccuracy + '%', icon: <FiTarget className="w-5 h-5" />, color: 'from-blue-500 to-cyan-400' },
+            { label: 'Local Accuracy', value: dynamicAccuracy + '%', icon: <FiTarget className="w-5 h-5" />, color: 'from-blue-500 to-cyan-400' },
             { label: 'Dataset Size', value: clientPersonalMetrics.datasetSize.toLocaleString(), icon: <FiDatabase className="w-5 h-5" />, color: 'from-violet-500 to-purple-400' },
-            { label: 'Rounds Trained', value: String(clientPersonalMetrics.roundsTrained), icon: <FiRefreshCw className="w-5 h-5" />, color: 'from-pink-500 to-rose-400' },
+            { label: 'Rounds Trained', value: String(dynamicRounds), icon: <FiRefreshCw className="w-5 h-5" />, color: 'from-pink-500 to-rose-400' },
             { label: 'Model Version', value: clientPersonalMetrics.modelVersion, icon: <FiCpu className="w-5 h-5" />, color: 'from-amber-500 to-orange-400' },
           ].map((m, i) => (
             <div key={m.label} className="rounded-2xl glass p-5 group hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1 animate-scale-in" style={{ animationDelay: `${i * 100}ms` }}>
@@ -449,10 +479,10 @@ export default function ClientDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold dark:text-white text-slate-900">Your Training History</h3>
-              <p className="text-xs dark:text-slate-400 text-slate-500 mt-0.5">Local accuracy over {roundLabels.length} federated rounds</p>
+              <p className="text-xs dark:text-slate-400 text-slate-500 mt-0.5">Local accuracy over {dynamicRounds} federated rounds</p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 font-medium">
-              {clientPersonalMetrics.localAccuracy}% current
+              {dynamicAccuracy}% current
             </div>
           </div>
           <div className="h-64 sm:h-72">

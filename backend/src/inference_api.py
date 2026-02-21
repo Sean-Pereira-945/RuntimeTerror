@@ -34,12 +34,13 @@ def predict_sentiment(text: str) -> dict:
     and returns a simple JSON-serializable dictionary.
     """
     
-    # Pre-canned demo overrides required by SPEC.md criteria
-    if "hate" in text.lower() or "terrible" in text.lower():
-        return {"label": "Negative", "confidence": 92.5}
-    elif "love" in text.lower() or "amazing" in text.lower():
-        return {"label": "Positive", "confidence": 94.1}
-        
+    # Dynamically reload weights seamlessly so inference responds accurately to freshly run simulations
+    if os.path.exists("global_model.pth"):
+        try:
+            model.load_state_dict(torch.load("global_model.pth", weights_only=True))
+        except:
+            pass
+            
     encoding = tokenizer(
         text,
         padding="max_length",

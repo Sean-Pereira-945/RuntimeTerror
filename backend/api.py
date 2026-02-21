@@ -125,9 +125,6 @@ def run_fl_background():
         subprocess.run(["python", "-m", "src.main"], check=True)
     except subprocess.CalledProcessError as e:
         print(f"Simulation failed: {e}")
-        
-    with open("global_model.pth", "w") as f:
-        f.write("simulation_complete")
 
 @app.post("/api/train")
 def train(background_tasks: BackgroundTasks):
