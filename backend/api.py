@@ -286,7 +286,17 @@ async def upload_file(client_id: str = Form(...), file: UploadFile = File(...), 
         tmp_path = tmp.name
 
     try:
-        df = pd.read_csv(tmp_path)
+        # Try common encodings to handle files with BOM or non-UTF-8 encoding
+        for enc in ("utf-8-sig", "utf-8", "utf-16", "latin-1"):
+            try:
+                df = pd.read_csv(tmp_path, encoding=enc)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        else:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail="Could not decode CSV file. Please save it as UTF-8.")
+
         if "text" not in df.columns or "label" not in df.columns:
             os.unlink(tmp_path)
             raise HTTPException(status_code=400, detail=f"CSV must have 'text' and 'label' columns. Found: {list(df.columns)}")
@@ -296,7 +306,9 @@ async def upload_file(client_id: str = Form(...), file: UploadFile = File(...), 
             raise HTTPException(status_code=400, detail="'label' column must contain only 0 (negative) or 1 (positive)")
 
         file_path = os.path.join(upload_dir, f"{client_id}.csv")
-        shutil.move(tmp_path, file_path)
+        # Re-save as UTF-8 so downstream code never has encoding issues
+        df.to_csv(file_path, index=False, encoding="utf-8")
+        os.unlink(tmp_path)
 
     except pd.errors.ParserError:
         os.unlink(tmp_path)
