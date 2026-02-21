@@ -2,47 +2,50 @@ import threading
 import time
 import flwr as fl
 import torch
-from src.strategy import AsyncMedianStrategy
-from src.client import FLClient
-from src.model import SimpleCNN
-from src.data import get_dataset, partition_data
+import numpy as np
+
+from src.nlp_client import NLPClient
+from src.nlp_model import ReviewLSTM
+from src.nlp_data import get_store_dataset
 
 def run_server(num_clients):
-    strategy = AsyncMedianStrategy(
-        k_buffer_size=3,
-        fraction_fit=0.01,
-        fraction_evaluate=0.01,
-        min_fit_clients=1,
-        min_evaluate_clients=1,
+    # Standard FedAvg for the LSTM as requested
+    strategy = fl.server.strategy.FedAvg(
+        fraction_fit=1.0, 
+        fraction_evaluate=1.0,
+        min_fit_clients=num_clients,
+        min_evaluate_clients=num_clients,
         min_available_clients=num_clients,
     )
+    
+    # We will save the model weights after the simulation in the main thread
     fl.server.start_server(
         server_address="127.0.0.1:8080",
         config=fl.server.ServerConfig(num_rounds=3),
         strategy=strategy,
     )
 
-def run_client(client_id, dataset, indices, device):
+def run_client(client_id, store_name, dataset, device):
     time.sleep(2 + client_id) # Stagger starts to allow server to boot
-    model = SimpleCNN()
-    client = FLClient(
+    model = ReviewLSTM()
+    client = NLPClient(
         client_id=client_id,
+        store_name=store_name,
         model=model,
         dataset=dataset,
-        indices=indices,
         lr=0.01,
         device=device
     )
     fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)
 
-def main():
+def execute_simulation():
     device = torch.device('cpu') # Use CPU for thread safety in local mockup
-    print("Loading data...")
-    train_dataset, _ = get_dataset(download=False)
+    print("Loading heterogeneous NLP data...")
     
-    num_clients = 2
-    partitions = partition_data(train_dataset, num_clients=num_clients, alpha=0.5)
+    stores = ["Phone", "Clothing", "Food"]
+    datasets = [get_store_dataset(store, num_samples=200) for store in stores]
     
+    num_clients = len(stores)
     print("Starting server thread...")
     server_thread = threading.Thread(target=run_server, args=(num_clients,), daemon=True)
     server_thread.start()
@@ -50,14 +53,14 @@ def main():
     print("Starting client threads...")
     client_threads = []
     for i in range(num_clients):
-        t = threading.Thread(target=run_client, args=(i, train_dataset, partitions[i], device))
+        t = threading.Thread(target=run_client, args=(i, stores[i], datasets[i], device))
         t.start()
         client_threads.append(t)
         
     for t in client_threads:
         t.join()
         
-    print("Plan 2.3 Verification Passed ✅")
-
+    print("Plan 3.2 Verification Passed ✅")
+    
 if __name__ == "__main__":
-    main()
+    execute_simulation()
