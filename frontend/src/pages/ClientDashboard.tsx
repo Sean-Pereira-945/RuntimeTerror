@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { startTraining as apiStartTraining, predictSentiment, uploadClientData } from '../api';
+import { startTraining as apiStartTraining, uploadClientData } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,11 +42,6 @@ export default function ClientDashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Inference state
-  const [inferenceText, setInferenceText] = useState('');
-  const [inferenceResult, setInferenceResult] = useState<{ label: string; confidence: number } | null>(null);
-  const [inferring, setInferring] = useState(false);
 
   const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(0);
   const [dynamicRounds, setDynamicRounds] = useState<number>(0);
@@ -212,54 +207,6 @@ export default function ClientDashboard() {
               <p className="mt-1 text-sm dark:text-slate-400 text-slate-500">
                 Welcome, <span className="text-blue-400 font-medium">{user?.name}</span> — {user?.org}
               </p>
-            </div>
-
-            {/* Live Inference Judge Demo Card (Compact) */}
-            <div className="flex-1 max-w-sm glass rounded-xl p-3 border border-white/10 ml-4 hidden md:block">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-300">Live Inference (Demo)</span>
-                {inferenceResult && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${inferenceResult.label === 'Positive' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {inferenceResult.label} ({inferenceResult.confidence.toFixed(1)}%)
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={inferenceText}
-                  onChange={(e) => setInferenceText(e.target.value)}
-                  placeholder="e.g. 'hate this phone'"
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500"
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter' && inferenceText) {
-                      setInferring(true);
-                      try {
-                        const res = await predictSentiment(inferenceText);
-                        setInferenceResult(res);
-                      } finally {
-                        setInferring(false);
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={async () => {
-                    if (!inferenceText) return;
-                    setInferring(true);
-                    try {
-                      const res = await predictSentiment(inferenceText);
-                      setInferenceResult(res);
-                    } finally {
-                      setInferring(false);
-                    }
-                  }}
-                  disabled={inferring}
-                  className="bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                >
-                  Predict
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center gap-3">
