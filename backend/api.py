@@ -102,7 +102,7 @@ def get_metrics(user: dict = Depends(get_current_user)):
             "roundLabels": [],
             "adminMetrics": [
                 {"id": "accuracy", "label": "Global Model Accuracy", "value": 0, "suffix": "%", "trend": 0, "trendLabel": "", "icon": "accuracy", "color": "from-blue-500 to-cyan-400"},
-                {"id": "clients", "label": "Active Clients", "value": 0, "suffix": "/3", "trend": 0, "trendLabel": "", "icon": "clients", "color": "from-violet-500 to-purple-400"},
+                {"id": "clients", "label": "Active Clients", "value": 0, "suffix": "", "trend": 0, "trendLabel": "", "icon": "clients", "color": "from-violet-500 to-purple-400"},
                 {"id": "rounds", "label": "Training Rounds", "value": 0, "suffix": "", "trend": 0, "trendLabel": "", "icon": "rounds", "color": "from-pink-500 to-rose-400"},
                 {"id": "convergence", "label": "Avg Convergence", "value": 0, "suffix": "s", "trend": 0, "trendLabel": "", "icon": "convergence", "color": "from-amber-500 to-orange-400"},
             ],
@@ -124,47 +124,83 @@ def get_metrics(user: dict = Depends(get_current_user)):
         "roundLabels": round_labels,
         "adminMetrics": [
             {"id": "accuracy", "label": "Global Model Accuracy", "value": round(accuracy, 1), "suffix": "%", "trend": round(acc_trend, 1), "trendLabel": "vs last round", "icon": "accuracy", "color": "from-blue-500 to-cyan-400"},
-            {"id": "clients", "label": "Active Clients", "value": latest["participants"], "suffix": "/3", "trend": 0, "trendLabel": "all connected", "icon": "clients", "color": "from-violet-500 to-purple-400"},
+            {"id": "clients", "label": "Active Clients", "value": latest["participants"], "suffix": f"/{len(_discover_clients(history))}", "trend": 0, "trendLabel": "all connected", "icon": "clients", "color": "from-violet-500 to-purple-400"},
             {"id": "rounds", "label": "Training Rounds", "value": rounds_count, "suffix": "", "trend": rounds_count - prev["round"] if rounds_count > prev.get("round", 0) else 0, "trendLabel": "this session", "icon": "rounds", "color": "from-pink-500 to-rose-400"},
             {"id": "convergence", "label": "Avg Round Time", "value": round(sum(float(h["duration"].rstrip("s")) for h in history) / len(history), 1) if history else 0, "suffix": "s", "trend": round(float(latest["duration"].rstrip("s")) - float(prev["duration"].rstrip("s")), 1) if len(history) > 1 else 0, "trendLabel": "vs last round", "icon": "convergence", "color": "from-amber-500 to-orange-400"},
         ],
     }
 
 
+# ── Palette & helpers for dynamic client discovery ─────────────────
+_CLIENT_COLORS = ["#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#6366f1"]
+
+def _discover_clients(history: list) -> list[str]:
+    """Return a stable-ordered list of unique FL client_ids seen across all rounds."""
+    seen: dict[str, None] = {}  # insertion-order dict
+    for h in history:
+        for cm in h.get("client_metrics", []):
+            cid = cm.get("client_id", "")
+            if cid and cid not in seen:
+                seen[cid] = None
+    return list(seen.keys())
+
+
 @app.get("/api/clients")
 def get_clients(user: dict = Depends(get_current_user)):
     history = _get_history()
-    clients_def = {
-        "0": {"id": "client-a", "name": "Phone Store A", "shortName": "Phone", "dataPoints": 200, "color": "#3b82f6", "contribution": 34.2},
-        "1": {"id": "client-b", "name": "Clothing Store B", "shortName": "Clothing", "dataPoints": 200, "color": "#8b5cf6", "contribution": 33.3},
-        "2": {"id": "client-c", "name": "Food Store C", "shortName": "Food", "dataPoints": 200, "color": "#ec4899", "contribution": 32.5},
-    }
-
-    client_curves: dict[str, list] = {"Phone": [], "Clothing": [], "Food": []}
+    client_ids = _discover_clients(history)
     rounds_count = len(history)
 
-    # Map client_metrics by position index (0→Phone, 1→Clothing, 2→Food)
-    # since actual FL training uses random UUIDs as client_id
-    index_to_short = {0: "Phone", 1: "Clothing", 2: "Food"}
+    # Build per-client accuracy curves keyed by short name
+    id_to_short: dict[str, str] = {}
+    for i, cid in enumerate(client_ids):
+        id_to_short[cid] = f"Client {i + 1}"
+
+    client_curves: dict[str, list] = {name: [] for name in id_to_short.values()}
 
     for h in history:
-        cm_list = h.get("client_metrics", [])
-        for idx, cm in enumerate(cm_list):
-            short_name = index_to_short.get(idx)
-            if short_name:
-                client_curves[short_name].append(round(cm.get("accuracy", 0.0) * 100, 1))
+        seen_this_round: set[str] = set()
+        for cm in h.get("client_metrics", []):
+            cid = cm.get("client_id", "")
+            short = id_to_short.get(cid)
+            if short and short not in seen_this_round:
+                client_curves[short].append(round(cm.get("accuracy", 0.0) * 100, 1))
+                seen_this_round.add(short)
+
+    # Compute real contribution as inverse-loss share among all clients
+    total_inv_loss = 0.0
+    latest_losses: dict[str, float] = {}
+    if history:
+        for cm in history[-1].get("client_metrics", []):
+            cid = cm.get("client_id", "")
+            short = id_to_short.get(cid)
+            if short:
+                loss = cm.get("loss", 1.0)
+                inv = 1.0 / max(loss, 1e-6)
+                latest_losses[short] = inv
+                total_inv_loss += inv
+
+    uptimes = get_client_uptimes_db(history, client_ids)
 
     clients_res = []
-    uptimes = get_client_uptimes_db()
-    for cid, c in clients_def.items():
-        base = c.copy()
-        base["roundsParticipated"] = rounds_count
-        base["status"] = "active"
-        base["lastActive"] = "1 min ago"
-        short_name = c["shortName"]
-        base["localAccuracy"] = client_curves[short_name][-1] if client_curves[short_name] else 0.0
-        base["uptime"] = uptimes.get(short_name, 99.0)
-        clients_res.append(base)
+    for i, cid in enumerate(client_ids):
+        short = id_to_short[cid]
+        color = _CLIENT_COLORS[i % len(_CLIENT_COLORS)]
+        contribution = round(latest_losses.get(short, 0) / total_inv_loss * 100, 1) if total_inv_loss else 0.0
+        curve = client_curves.get(short, [])
+        clients_res.append({
+            "id": cid,
+            "name": f"FL Client {i + 1}",
+            "shortName": short,
+            "dataPoints": 200,
+            "color": color,
+            "contribution": contribution,
+            "roundsParticipated": sum(1 for v in client_curves.get(short, []) if v is not None),
+            "status": "active",
+            "lastActive": history[-1]["timestamp"].split(" ")[1][:5] if history else "--",
+            "localAccuracy": curve[-1] if curve else 0.0,
+            "uptime": uptimes.get(short, 0.0),
+        })
 
     return {"clients": clients_res, "clientAccuracyCurves": client_curves}
 
@@ -193,21 +229,18 @@ def get_client_personal(user: dict = Depends(get_current_user)):
     rounds_count = len(history)
     latest = history[-1] if history else None
 
-    # Determine which store this user belongs to
-    user_org = user.get("org", "")
-    store_name = "Phone"
-    if "Clothing" in user_org or "BioTech" in user_org:
-        store_name = "Clothing"
-    elif "Food" in user_org or "Stanford" in user_org:
-        store_name = "Food"
+    # Assign this user to the first FL client (no persistent user↔FL-client mapping exists)
+    client_ids = _discover_clients(history)
+    assigned_idx = 0  # default to first client
 
-    # Build per-client accuracy curve (by index: 0→Phone, 1→Clothing, 2→Food)
-    store_idx = {"Phone": 0, "Clothing": 1, "Food": 2}[store_name]
+    # Build accuracy curve for the assigned client
+    assigned_cid = client_ids[assigned_idx] if client_ids else None
     client_curve: list[float] = []
     for h in history:
-        cm_list = h.get("client_metrics", [])
-        if store_idx < len(cm_list):
-            client_curve.append(round(cm_list[store_idx].get("accuracy", 0.0) * 100, 1))
+        for cm in h.get("client_metrics", []):
+            if cm.get("client_id") == assigned_cid:
+                client_curve.append(round(cm.get("accuracy", 0.0) * 100, 1))
+                break
 
     local_accuracy = client_curve[-1] if client_curve else 0.0
     model_version = f"v{rounds_count}.{len(client_curve)}" if rounds_count else "v0.0"

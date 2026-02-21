@@ -5,7 +5,7 @@ Handles connection pooling, schema migrations, and all CRUD helpers
 for auth, FL metrics, feature configs, and email logs.
 """
 
-import os, json, time, math, random
+import os, json, math
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
@@ -400,16 +400,35 @@ def seed_initial_data():
 #  Client Uptimes  (derived from fl_metrics)
 # ══════════════════════════════════════════════════════════════════════
 
-def get_client_uptimes_db() -> Dict[str, float]:
-    """Return uptime % per client, derived from participation across FL rounds."""
-    metrics = get_all_fl_metrics()
-    total_rounds = max(len(metrics), 10)
-    rng = random.Random(int(time.time()) // 30)
+def get_client_uptimes_db(history: list | None = None, client_ids: list | None = None) -> Dict[str, float]:
+    """Return uptime % per client, derived from actual participation across FL rounds."""
+    if history is None:
+        history = get_all_fl_metrics()
+    total_rounds = len(history)
+    if total_rounds == 0:
+        return {}
 
-    CLIENT_SHORT = {0: "Phone", 1: "Clothing", 2: "Food"}
+    # Build stable short-name mapping from client_ids
+    if client_ids is None:
+        seen: dict[str, None] = {}
+        for h in history:
+            for cm in h.get("client_metrics", []):
+                cid = cm.get("client_id", "")
+                if cid and cid not in seen:
+                    seen[cid] = None
+        client_ids = list(seen.keys())
+
+    id_to_short = {cid: f"Client {i+1}" for i, cid in enumerate(client_ids)}
+
+    # Count how many rounds each client actually participated in
+    participation: Dict[str, int] = {name: 0 for name in id_to_short.values()}
+    for h in history:
+        for cm in h.get("client_metrics", []):
+            short = id_to_short.get(cm.get("client_id", ""))
+            if short:
+                participation[short] += 1
+
     uptimes: Dict[str, float] = {}
-    for cid, short in CLIENT_SHORT.items():
-        missed = rng.randint(0, 2)
-        uptime = round((total_rounds - missed) / total_rounds * 100, 1)
-        uptimes[short] = uptime
+    for short, count in participation.items():
+        uptimes[short] = round(count / total_rounds * 100, 1)
     return uptimes
