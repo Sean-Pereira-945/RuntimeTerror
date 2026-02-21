@@ -429,7 +429,7 @@ export default function ClientDashboard() {
         </div>
 
         {/* Dynamic Schema & Multi-Modal Panels */}
-        <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div className={`flex flex-col gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
             <DynamicSchemaPanel />
           </div>
