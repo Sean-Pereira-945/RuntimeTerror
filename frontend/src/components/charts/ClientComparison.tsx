@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -8,11 +9,18 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import { clients } from '../../data/mockData';
+import { fetchClients } from '../../api';
+import type { Client } from '../../data/mockData';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function ClientComparison() {
+  const [clients, setClients] = useState<Client[]>([]);
+
+  useEffect(() => {
+    fetchClients().then(res => setClients(res.clients || []));
+  }, []);
+
   const data = {
     labels: clients.map((c) => c.shortName),
     datasets: [

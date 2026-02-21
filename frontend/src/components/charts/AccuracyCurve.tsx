@@ -11,20 +11,30 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { accuracyOverRounds, lossOverRounds, roundLabels } from '../../data/mockData';
+import { fetchMetrics } from '../../api';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function AccuracyCurve() {
   const chartRef = useRef<ChartJS<'line'>>(null);
   const [visibleRounds, setVisibleRounds] = useState(40);
+  const [dataPayload, setDataPayload] = useState({ accuracyOverRounds: [] as number[], lossOverRounds: [] as number[], roundLabels: [] as string[] });
+
+  useEffect(() => {
+    fetchMetrics().then(res => {
+      setDataPayload({ accuracyOverRounds: res.accuracyOverRounds || [], lossOverRounds: res.lossOverRounds || [], roundLabels: res.roundLabels || [] });
+    });
+  }, []);
+
+  const { accuracyOverRounds, lossOverRounds, roundLabels } = dataPayload;
 
   // Simulate real-time updates
   useEffect(() => {
+    if (!accuracyOverRounds || accuracyOverRounds.length === 0) return;
     if (visibleRounds >= accuracyOverRounds.length) return;
     const timer = setTimeout(() => setVisibleRounds((v) => Math.min(v + 1, accuracyOverRounds.length)), 2500);
     return () => clearTimeout(timer);
-  }, [visibleRounds]);
+  }, [visibleRounds, accuracyOverRounds]);
 
   const data = {
     labels: roundLabels.slice(0, visibleRounds),

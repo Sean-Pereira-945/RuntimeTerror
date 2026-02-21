@@ -1,6 +1,14 @@
-import { trainingHistory } from '../../data/mockData';
+import { useEffect, useState } from 'react';
+import { fetchHistory } from '../../api';
+import type { TrainingRound } from '../../data/mockData';
 
 export default function TrainingHistoryTable() {
+  const [trainingHistory, setTrainingHistory] = useState<TrainingRound[]>([]);
+
+  useEffect(() => {
+    fetchHistory().then(res => setTrainingHistory(res.trainingHistory || []));
+  }, []);
+
   return (
     <div className="rounded-2xl glass p-5 sm:p-6">
       <div className="flex items-center justify-between mb-4">
@@ -75,22 +83,20 @@ export default function TrainingHistoryTable() {
                 </td>
                 <td className="py-3 px-3">
                   <span
-                    className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                      row.status === 'completed'
+                    className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${row.status === 'completed'
                         ? 'bg-emerald-500/15 text-emerald-400'
                         : row.status === 'in-progress'
-                        ? 'bg-amber-500/15 text-amber-400'
-                        : 'bg-red-500/15 text-red-400'
-                    }`}
+                          ? 'bg-amber-500/15 text-amber-400'
+                          : 'bg-red-500/15 text-red-400'
+                      }`}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        row.status === 'completed'
+                      className={`w-1.5 h-1.5 rounded-full ${row.status === 'completed'
                           ? 'bg-emerald-500'
                           : row.status === 'in-progress'
-                          ? 'bg-amber-500 animate-pulse'
-                          : 'bg-red-500'
-                      }`}
+                            ? 'bg-amber-500 animate-pulse'
+                            : 'bg-red-500'
+                        }`}
                     />
                     {row.status === 'completed' ? 'Done' : row.status === 'in-progress' ? 'Running' : 'Failed'}
                   </span>
