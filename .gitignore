@@ -3,3 +3,9 @@ __pycache__/
 .env
 venv/
 data/
+global_model.pth
+.gsd/
+.get-shit-done-for-antigravity/
+*.md
+.gsd
+.get-shit-done-for-antigravity
