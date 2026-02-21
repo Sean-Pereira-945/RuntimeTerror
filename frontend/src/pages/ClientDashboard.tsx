@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { startTraining as apiStartTraining, uploadClientData } from '../api';
+import { startTraining as apiStartTraining, uploadPreview, finalizeUpload } from '../api';
+import type { UploadPreview } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,6 +42,12 @@ export default function ClientDashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Column-selection state
+  const [preview, setPreview] = useState<UploadPreview | null>(null);
+  const [textCol, setTextCol] = useState('');
+  const [labelCol, setLabelCol] = useState('');
+  const [colError, setColError] = useState<string | null>(null);
 
   const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(0);
   const [dynamicRounds, setDynamicRounds] = useState<number>(0);
@@ -97,26 +104,55 @@ export default function ClientDashboard() {
     setUploadedFile(file.name);
     setStatus('uploading');
     setProgress(0);
+    setPreview(null);
+    setTextCol('');
+    setLabelCol('');
+    setColError(null);
 
-    // Simulate upload progress while fetch happens
     let p = 0;
     const interval = setInterval(() => {
       p += Math.random() * 5 + 2;
-      setProgress(Math.min(p, 90)); // Cap fake progress at 90%
+      setProgress(Math.min(p, 90));
     }, 200);
 
     try {
-      // Use the user's org directly as the store name, defaulting to org or 'default'
-      const storeName = user?.org || 'default';
-
-      await uploadClientData(storeName, file);
-
+      const result = await uploadPreview(file);
       clearInterval(interval);
       setProgress(100);
-      setTimeout(() => setStatus('idle'), 700);
-    } catch (error) {
-      console.error(error);
+      setPreview(result);
+      // Auto-select if common column names exist
+      const cols = result.columns.map(c => c.toLowerCase());
+      const textGuess = result.columns.find((_, i) => ['text', 'sentence', 'review', 'comment', 'content', 'message'].includes(cols[i]));
+      const labelGuess = result.columns.find((_, i) => ['label', 'sentiment', 'target', 'class', 'category'].includes(cols[i]));
+      if (textGuess) setTextCol(textGuess);
+      if (labelGuess) setLabelCol(labelGuess);
+      setStatus('idle');
+    } catch (error: unknown) {
       clearInterval(interval);
+      setColError(error instanceof Error ? error.message : 'Upload failed');
+      setStatus('idle');
+    }
+  };
+
+  const handleConfirmColumns = async () => {
+    if (!preview) return;
+    if (!textCol || !labelCol) { setColError('Select both a text column and a label column'); return; }
+    if (textCol === labelCol) { setColError('Text and label columns must be different'); return; }
+    setColError(null);
+    setStatus('uploading');
+    setProgress(50);
+
+    try {
+      const storeName = user?.org || 'default';
+      await finalizeUpload(storeName, preview.stagingId, textCol, labelCol);
+      setProgress(100);
+      setPreview(null);
+      // Refresh personal data
+      const data = await fetchClientPersonal();
+      setPersonalData(data);
+      setTimeout(() => setStatus('idle'), 700);
+    } catch (error: unknown) {
+      setColError(error instanceof Error ? error.message : 'Save failed');
       setStatus('idle');
     }
   };
@@ -222,49 +258,51 @@ export default function ClientDashboard() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
-          {/* File Upload */}
+          {/* File Upload + Column Selector */}
           <div className={`rounded-2xl glass p-6 transition-all duration-800 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <h3 className="font-semibold dark:text-white text-slate-900 mb-4 flex items-center gap-2">
               <FiUploadCloud className="w-5 h-5 text-accent-400" /> Upload Training Data
             </h3>
 
-            {/* Drop zone */}
-            <div
-              className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer ${dragActive
-                ? 'border-violet-500 bg-violet-500/10'
-                : 'border-white/10 hover:border-white/20 hover:bg-white/[.02]'
-                }`}
-              onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-              onDragLeave={() => setDragActive(false)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const file = e.dataTransfer.files[0];
-                if (file) handleFileSelect(file);
-              }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".csv,.json,.parquet"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
+            {/* Step 1: Drop zone (show when no preview yet) */}
+            {!preview && (
+              <div
+                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer ${dragActive
+                  ? 'border-violet-500 bg-violet-500/10'
+                  : 'border-white/10 hover:border-white/20 hover:bg-white/[.02]'
+                  }`}
+                onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+                onDragLeave={() => setDragActive(false)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  const file = e.dataTransfer.files[0];
                   if (file) handleFileSelect(file);
                 }}
-              />
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-7 h-7 dark:text-violet-400 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-7 h-7 dark:text-violet-400 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <p className="dark:text-slate-300 text-slate-700 font-medium text-sm">
+                  {dragActive ? 'Drop your file here' : 'Drag & drop or click to upload'}
+                </p>
+                <p className="text-xs dark:text-slate-500 text-slate-400 mt-1">CSV file — max 50 MB</p>
               </div>
-              <p className="dark:text-slate-300 text-slate-700 font-medium text-sm">
-                {dragActive ? 'Drop your file here' : 'Drag & drop or click to upload'}
-              </p>
-              <p className="text-xs dark:text-slate-500 text-slate-400 mt-1">CSV, JSON, or Parquet — max 50MB</p>
-            </div>
+            )}
 
             {/* Upload progress */}
             {status === 'uploading' && (
@@ -282,25 +320,109 @@ export default function ClientDashboard() {
               </div>
             )}
 
-            {/* Recent uploads */}
-            <div className="mt-6 space-y-2">
-              <h4 className="text-xs font-medium dark:text-slate-500 text-slate-400 uppercase tracking-wider">Recent Uploads</h4>
-              {(personalData?.recentUploads ?? []).length === 0 && (
-                <p className="text-xs dark:text-slate-500 text-slate-400 py-2">No files uploaded yet</p>
-              )}
-              {(personalData?.recentUploads ?? []).map((f) => (
-                <div key={f.name} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[.03] transition-colors">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-400 text-xs">
-                    {f.name.endsWith('.csv') ? 'CSV' : 'JSON'}
+            {/* Step 2: Column selector (show when preview is ready) */}
+            {preview && status !== 'uploading' && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium dark:text-white text-slate-900">{preview.filename}</p>
+                    <p className="text-xs dark:text-slate-400 text-slate-500">{preview.rows.toLocaleString()} rows · {preview.columns.length} columns</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs dark:text-slate-300 text-slate-700 font-medium truncate">{f.name}</div>
-                    <div className="text-[10px] dark:text-slate-500 text-slate-400">{f.size} · {f.rows.toLocaleString()} rows</div>
-                  </div>
-                  <span className="text-[10px] dark:text-slate-600 text-slate-400">{f.date}</span>
+                  <button
+                    onClick={() => { setPreview(null); setColError(null); }}
+                    className="text-xs dark:text-slate-400 text-slate-500 hover:text-red-400 transition-colors"
+                  >
+                    Change file
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                {/* Preview table */}
+                <div className="overflow-x-auto rounded-xl border border-white/5">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="dark:bg-slate-800/60 bg-slate-100">
+                        {preview.columns.map((col) => (
+                          <th key={col} className="px-3 py-2 text-left font-medium dark:text-slate-300 text-slate-700 whitespace-nowrap">{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.preview.slice(0, 3).map((row, i) => (
+                        <tr key={i} className="border-t border-white/5">
+                          {preview.columns.map((col) => (
+                            <td key={col} className="px-3 py-1.5 dark:text-slate-400 text-slate-500 truncate max-w-[180px]">
+                              {String(row[col] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Column selectors */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium dark:text-slate-400 text-slate-500 mb-1.5">Text Column</label>
+                    <select
+                      value={textCol}
+                      onChange={(e) => setTextCol(e.target.value)}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm dark:bg-slate-800/80 bg-white border border-white/10 dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                    >
+                      <option value="">Select column…</option>
+                      {preview.columns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium dark:text-slate-400 text-slate-500 mb-1.5">Label Column</label>
+                    <select
+                      value={labelCol}
+                      onChange={(e) => setLabelCol(e.target.value)}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm dark:bg-slate-800/80 bg-white border border-white/10 dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                    >
+                      <option value="">Select column…</option>
+                      {preview.columns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {colError && (
+                  <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{colError}</p>
+                )}
+
+                <button
+                  onClick={handleConfirmColumns}
+                  disabled={!textCol || !labelCol || status === 'uploading'}
+                  className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                >
+                  Confirm & Save Dataset
+                </button>
+              </div>
+            )}
+
+            {/* Recent uploads */}
+            {!preview && (
+              <div className="mt-6 space-y-2">
+                <h4 className="text-xs font-medium dark:text-slate-500 text-slate-400 uppercase tracking-wider">Recent Uploads</h4>
+                {(personalData?.recentUploads ?? []).length === 0 && (
+                  <p className="text-xs dark:text-slate-500 text-slate-400 py-2">No files uploaded yet</p>
+                )}
+                {(personalData?.recentUploads ?? []).map((f) => (
+                  <div key={f.name} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[.03] transition-colors">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-400 text-xs">CSV</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs dark:text-slate-300 text-slate-700 font-medium truncate">{f.name}</div>
+                      <div className="text-[10px] dark:text-slate-500 text-slate-400">{f.size} · {f.rows.toLocaleString()} rows</div>
+                    </div>
+                    <span className="text-[10px] dark:text-slate-600 text-slate-400">{f.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Training Control */}

@@ -20,6 +20,7 @@ frontend/.vite/
 *.pth
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
+backend/data/staging/
 
 # ── IDE & OS ─────────────────────────────────────
 .vscode/

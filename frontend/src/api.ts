@@ -96,23 +96,52 @@ export async function startTraining() {
     }
 }
 
-export async function uploadClientData(clientId: string, file: File) {
+export interface UploadPreview {
+    stagingId: string;
+    filename: string;
+    columns: string[];
+    rows: number;
+    preview: Record<string, unknown>[];
+}
+
+export async function uploadPreview(file: File): Promise<UploadPreview> {
     const formData = new FormData();
-    formData.append('client_id', clientId);
     formData.append('file', file);
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/upload`, {
-            method: 'POST',
-            headers: authHeaders(),
-            body: formData,
-        });
-        if (!response.ok) throw new Error('Upload failed');
-        return await response.json();
-    } catch (error) {
-        console.warn("Backend unreachable for upload");
-        throw error;
+    const response = await fetch(`${API_BASE_URL}/api/upload-preview`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(err.detail || 'Upload preview failed');
     }
+    return response.json();
+}
+
+export async function finalizeUpload(
+    clientId: string,
+    stagingId: string,
+    textColumn: string,
+    labelColumn: string,
+) {
+    const formData = new FormData();
+    formData.append('client_id', clientId);
+    formData.append('staging_id', stagingId);
+    formData.append('text_column', textColumn);
+    formData.append('label_column', labelColumn);
+
+    const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(err.detail || 'Finalize upload failed');
+    }
+    return response.json();
 }
 
 

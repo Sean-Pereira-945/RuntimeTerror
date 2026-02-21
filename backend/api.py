@@ -303,37 +303,102 @@ def train(background_tasks: BackgroundTasks, admin: dict = Depends(require_role(
     return {"status": "Training started in background"}
 
 
-@app.post("/api/upload")
-async def upload_file(client_id: str = Form(...), file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    import shutil
-    import pandas as pd
-    import tempfile
+@app.post("/api/upload-preview")
+async def upload_preview(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Upload a CSV and return its columns + first 5 rows for preview."""
+    import shutil, tempfile, pandas as pd
 
-    upload_dir = os.path.join(os.path.dirname(__file__), "data", "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
+    staging_dir = os.path.join(os.path.dirname(__file__), "data", "staging")
+    os.makedirs(staging_dir, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir=staging_dir) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
     try:
-        df = pd.read_csv(tmp_path)
-        if "text" not in df.columns or "label" not in df.columns:
+        for enc in ("utf-8", "utf-16", "latin-1"):
+            try:
+                df = pd.read_csv(tmp_path, encoding=enc)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        else:
             os.unlink(tmp_path)
-            raise HTTPException(status_code=400, detail=f"CSV must have 'text' and 'label' columns. Found: {list(df.columns)}")
+            raise HTTPException(status_code=400, detail="Could not decode CSV with utf-8, utf-16, or latin-1")
 
+        columns = list(df.columns)
+        preview_rows = df.head(5).fillna("").to_dict(orient="records")
+        staging_id = os.path.basename(tmp_path)
+
+        return {
+            "stagingId": staging_id,
+            "filename": file.filename,
+            "columns": columns,
+            "rows": len(df),
+            "preview": preview_rows,
+        }
+    except pd.errors.ParserError:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=400, detail="File is not a valid CSV")
+
+
+@app.post("/api/upload")
+async def upload_file(
+    client_id: str = Form(...),
+    staging_id: str = Form(...),
+    text_column: str = Form(...),
+    label_column: str = Form(...),
+    user: dict = Depends(get_current_user),
+):
+    """Finalize upload: rename user-chosen columns to 'text'/'label' and save."""
+    import shutil, pandas as pd
+
+    staging_dir = os.path.join(os.path.dirname(__file__), "data", "staging")
+    upload_dir = os.path.join(os.path.dirname(__file__), "data", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    tmp_path = os.path.join(staging_dir, staging_id)
+
+    if not os.path.isfile(tmp_path):
+        raise HTTPException(status_code=404, detail="Staging file not found. Please re-upload.")
+
+    try:
+        for enc in ("utf-8", "utf-16", "latin-1"):
+            try:
+                df = pd.read_csv(tmp_path, encoding=enc)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        else:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail="Could not decode CSV")
+
+        if text_column not in df.columns:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail=f"Column '{text_column}' not found")
+        if label_column not in df.columns:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=400, detail=f"Column '{label_column}' not found")
+
+        # Rename to standard columns the FL pipeline expects
+        df = df.rename(columns={text_column: "text", label_column: "label"})
+
+        # Validate label values are binary
         if not df["label"].isin([0, 1]).all():
             os.unlink(tmp_path)
-            raise HTTPException(status_code=400, detail="'label' column must contain only 0 (negative) or 1 (positive)")
+            raise HTTPException(
+                status_code=400,
+                detail="Label column must contain only 0 (negative) or 1 (positive)",
+            )
 
         file_path = os.path.join(upload_dir, f"{client_id}.csv")
-        shutil.move(tmp_path, file_path)
+        df[["text", "label"]].to_csv(file_path, index=False)
+        os.unlink(tmp_path)
 
     except pd.errors.ParserError:
         os.unlink(tmp_path)
         raise HTTPException(status_code=400, detail="File is not a valid CSV")
 
-    return {"filename": file.filename, "client_id": client_id, "rows": len(df), "status": "success"}
+    return {"filename": staging_id, "client_id": client_id, "rows": len(df), "status": "success"}
 
 
 # ══════════════════════════════════════════════════════════════════════
