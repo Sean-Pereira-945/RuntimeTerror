@@ -1,12 +1,13 @@
 # STATE.md
 
 ## Current Position
-- **Phase**: 3
-- **Task**: Planning complete (Amended for NLP/Streamlit Judge Demo)
-- **Status**: Ready for execution
+- **Phase**: 4 (completed)
+- **Task**: Demo readiness achieved
+- **Status**: Verified
 
 ## Last Session Summary
-Phase 3 was pivoted to address the new Amazon/Google-style product review requirements. Created plans to build a synthetic NLP pipeline, an LSTM model, FedAvg with random epochs, and a Streamlit UI.
+Executed Phases 3 and 4 successfully by fulfilling the new Judge Demo requirements. Built an NLP data pipeline, a PyTorch LSTM model, a Flower Federated Learning implementation handling random/asynchronous client epochs across 3 domains, and integrated it fully into a Streamlit UI capable of live prediction inferences.
 
 ## Next Steps
-1. /execute 3
+1. User can run `streamlit run app.py` to view the demo.
+2. /complete-milestone
