@@ -23,12 +23,12 @@ import {
   FiClock,
   FiCalendar,
 } from 'react-icons/fi';
-import {
-  clientPersonalMetrics,
-  recentUploads,
-  roundLabels,
-} from '../data/mockData';
-import { fetchMetrics, fetchClients } from '../api';
+import { fetchClientPersonal } from '../api';
+import type { ClientPersonalData } from '../api';
+import DynamicSchemaPanel from '../components/charts/DynamicSchemaPanel';
+import MultiModalPanel from '../components/charts/MultiModalPanel';
+import BotIntegrationPanel from '../components/charts/BotIntegrationPanel';
+import EmailTrainingPanel from '../components/charts/EmailTrainingPanel';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
@@ -49,30 +49,22 @@ export default function ClientDashboard() {
   const [inferenceResult, setInferenceResult] = useState<{ label: string; confidence: number } | null>(null);
   const [inferring, setInferring] = useState(false);
 
-  const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(clientPersonalMetrics.localAccuracy);
-  const [dynamicRounds, setDynamicRounds] = useState<number>(clientPersonalMetrics.roundsTrained);
+  const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(0);
+  const [dynamicRounds, setDynamicRounds] = useState<number>(0);
   const [dynamicCurve, setDynamicCurve] = useState<number[]>([]);
-  const [dynamicLabels, setDynamicLabels] = useState<string[]>(roundLabels);
+  const [dynamicLabels, setDynamicLabels] = useState<string[]>([]);
+  const [personalData, setPersonalData] = useState<ClientPersonalData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const metricsRes = await fetchMetrics();
-        const clientsRes = await fetchClients();
-
-        let storeName = 'Phone';
-        const userOrg = user?.org || '';
-        if (userOrg.includes('Clothing') || userOrg.includes('BioTech')) storeName = 'Clothing';
-        if (userOrg.includes('Food') || userOrg.includes('Stanford')) storeName = 'Food';
-
-        if (clientsRes.clientAccuracyCurves && clientsRes.clientAccuracyCurves[storeName]) {
-          const curve = clientsRes.clientAccuracyCurves[storeName];
-          if (curve.length > 0) {
-            setDynamicCurve(curve);
-            setDynamicAccuracy(curve[curve.length - 1]);
-            setDynamicRounds(curve.length);
-            setDynamicLabels(curve.map((_: any, i: number) => `Round ${i + 1}`));
-          }
+        const data = await fetchClientPersonal();
+        setPersonalData(data);
+        if (data.curve.length > 0) {
+          setDynamicCurve(data.curve);
+          setDynamicAccuracy(data.localAccuracy);
+          setDynamicRounds(data.roundsTrained);
+          setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
         }
       } catch (e) {
         console.error("Failed to fetch live client metrics", e);
@@ -177,7 +169,7 @@ export default function ClientDashboard() {
   };
 
   const personalChartData = {
-    labels: dynamicLabels.length > 0 ? dynamicLabels : roundLabels,
+    labels: dynamicLabels,
     datasets: [
       {
         label: 'Your Local Accuracy',
@@ -287,9 +279,9 @@ export default function ClientDashboard() {
         <div className={`grid sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {[
             { label: 'Local Accuracy', value: dynamicAccuracy + '%', icon: <FiTarget className="w-5 h-5" />, color: 'from-blue-500 to-cyan-400' },
-            { label: 'Dataset Size', value: clientPersonalMetrics.datasetSize.toLocaleString(), icon: <FiDatabase className="w-5 h-5" />, color: 'from-violet-500 to-purple-400' },
+            { label: 'Dataset Size', value: (personalData?.datasetSize ?? 0).toLocaleString(), icon: <FiDatabase className="w-5 h-5" />, color: 'from-violet-500 to-purple-400' },
             { label: 'Rounds Trained', value: String(dynamicRounds), icon: <FiRefreshCw className="w-5 h-5" />, color: 'from-pink-500 to-rose-400' },
-            { label: 'Model Version', value: clientPersonalMetrics.modelVersion, icon: <FiCpu className="w-5 h-5" />, color: 'from-amber-500 to-orange-400' },
+            { label: 'Model Version', value: personalData?.modelVersion ?? 'v0.0', icon: <FiCpu className="w-5 h-5" />, color: 'from-amber-500 to-orange-400' },
           ].map((m, i) => (
             <div key={m.label} className="rounded-2xl glass p-5 group hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1 animate-scale-in" style={{ animationDelay: `${i * 100}ms` }}>
               <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${m.color} opacity-80 rounded-t-2xl`} />
@@ -364,7 +356,10 @@ export default function ClientDashboard() {
             {/* Recent uploads */}
             <div className="mt-6 space-y-2">
               <h4 className="text-xs font-medium dark:text-slate-500 text-slate-400 uppercase tracking-wider">Recent Uploads</h4>
-              {recentUploads.map((f) => (
+              {(personalData?.recentUploads ?? []).length === 0 && (
+                <p className="text-xs dark:text-slate-500 text-slate-400 py-2">No files uploaded yet</p>
+              )}
+              {(personalData?.recentUploads ?? []).map((f) => (
                 <div key={f.name} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[.03] transition-colors">
                   <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-400 text-xs">
                     {f.name.endsWith('.csv') ? 'CSV' : 'JSON'}
@@ -461,8 +456,8 @@ export default function ClientDashboard() {
             {/* Quick info */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Last Round Time', value: clientPersonalMetrics.lastRoundTime, icon: <FiClock className="w-4 h-4 text-accent-400" /> },
-                { label: 'Next Scheduled', value: clientPersonalMetrics.nextScheduled, icon: <FiCalendar className="w-4 h-4 text-accent-400" /> },
+                { label: 'Last Round Time', value: personalData?.lastRoundTime ?? '0s', icon: <FiClock className="w-4 h-4 text-accent-400" /> },
+                { label: 'Next Scheduled', value: personalData?.nextScheduled ?? '--', icon: <FiCalendar className="w-4 h-4 text-accent-400" /> },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl bg-white/[.03] p-3 border border-white/5">
                   <div className="mb-1">{item.icon}</div>
@@ -487,6 +482,26 @@ export default function ClientDashboard() {
           </div>
           <div className="h-64 sm:h-72">
             <Line data={personalChartData as any} options={personalChartOpts as any} />
+          </div>
+        </div>
+
+        {/* Dynamic Schema & Multi-Modal Panels */}
+        <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
+            <DynamicSchemaPanel />
+          </div>
+          <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
+            <MultiModalPanel />
+          </div>
+        </div>
+
+        {/* Bot + Email Integration Panels */}
+        <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="animate-fade-in" style={{ animationDelay: '700ms' }}>
+            <BotIntegrationPanel />
+          </div>
+          <div className="animate-fade-in" style={{ animationDelay: '800ms' }}>
+            <EmailTrainingPanel />
           </div>
         </div>
       </main>

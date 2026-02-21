@@ -6,16 +6,9 @@ import pandas as pd
 
 from transformers import DistilBertTokenizer
 
-# Bypassing HuggingFace internet deadlocks with a local tensor generator
 MAX_LENGTH = 64
-class DummyTokenizer:
-    def __call__(self, text, padding, truncation, max_length, return_tensors):
-        import torch
-        return {
-            "input_ids": torch.randint(0, 1000, (1, max_length)),
-            "attention_mask": torch.ones((1, max_length), dtype=torch.long)
-        }
-tokenizer = DummyTokenizer()
+# Use the real DistilBERT tokenizer so training learns actual text→sentiment mapping
+tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 
 class ReviewDataset(Dataset):
     def __init__(self, texts, labels, max_length=MAX_LENGTH):
@@ -59,7 +52,7 @@ def generate_synthetic_reviews(store_name, num_samples=1000):
         "The {} is very poor quality."
     ]
     
-    item_type = ""
+    item_type = "product"  # default fallback
     if store_name == "Phone":
         item_type = "phone"
     elif store_name == "Clothing":

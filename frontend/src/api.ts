@@ -1,46 +1,69 @@
-import { adminMetrics, clients, clientAccuracyCurves, accuracyOverRounds, lossOverRounds, roundLabels, trainingHistory } from './data/mockData';
+// Value imports removed — all fallbacks use empty defaults
+import type {
+    SecuritySummary,
+    AttackEvent,
+    FaultToleranceData,
+    SelfImprovementPoint,
+    SchemaConfig,
+    MultiModalConfig,
+    BotsConfig,
+    EmailData,
+} from './data/securityMockData';
+import type { MetricCard, Client, TrainingRound } from './data/mockData';
+import { getAuthHeaders } from './context/AuthContext';
 
 const API_BASE_URL = 'http://localhost:8000';
 
+/** Merge auth headers with any additional headers */
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return { ...getAuthHeaders(), ...extra };
+}
+
 export async function fetchMetrics() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/metrics`);
+        const response = await fetch(`${API_BASE_URL}/api/metrics`, {
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Network error');
         return await response.json();
     } catch (error) {
-        console.warn("Backend unreachable, falling back to mockData");
+        console.warn("Backend unreachable for metrics");
         return {
-            accuracyOverRounds,
-            adminMetrics,
-            lossOverRounds,
-            roundLabels
+            accuracyOverRounds: [] as number[],
+            lossOverRounds: [] as number[],
+            roundLabels: [] as string[],
+            adminMetrics: [] as MetricCard[],
         };
     }
 }
 
 export async function fetchClients() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/clients`);
+        const response = await fetch(`${API_BASE_URL}/api/clients`, {
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Network error');
         return await response.json();
     } catch (error) {
-        console.warn("Backend unreachable, falling back to mockData");
+        console.warn("Backend unreachable for clients");
         return {
-            clients,
-            clientAccuracyCurves
+            clients: [] as Client[],
+            clientAccuracyCurves: {} as Record<string, number[]>,
         };
     }
 }
 
 export async function fetchHistory() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/history`);
+        const response = await fetch(`${API_BASE_URL}/api/history`, {
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Network error');
         return await response.json();
     } catch (error) {
-        console.warn("Backend unreachable, falling back to mockData");
+        console.warn("Backend unreachable for history");
         return {
-            trainingHistory
+            trainingHistory: [] as TrainingRound[],
         };
     }
 }
@@ -49,9 +72,7 @@ export async function predictSentiment(text: string) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/predict`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ text }),
         });
         if (!response.ok) throw new Error('Network error');
@@ -65,7 +86,8 @@ export async function predictSentiment(text: string) {
 export async function startTraining() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/train`, {
-            method: "POST"
+            method: "POST",
+            headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Network error');
         return await response.json();
@@ -83,6 +105,7 @@ export async function uploadClientData(clientId: string, file: File) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/upload`, {
             method: 'POST',
+            headers: authHeaders(),
             body: formData,
         });
         if (!response.ok) throw new Error('Upload failed');
@@ -91,4 +114,251 @@ export async function uploadClientData(clientId: string, file: File) {
         console.warn("Backend unreachable for upload");
         throw error;
     }
+}
+
+
+// ── Client Personal Metrics API ───────────────────────────────────────
+
+export interface ClientPersonalData {
+    localAccuracy: number;
+    datasetSize: number;
+    roundsTrained: number;
+    lastRoundTime: string;
+    modelVersion: string;
+    nextScheduled: string;
+    curve: number[];
+    recentUploads: { name: string; size: string; date: string; rows: number }[];
+}
+
+export async function fetchClientPersonal(): Promise<ClientPersonalData> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/client-personal`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch (error) {
+        console.warn("Backend unreachable for client-personal");
+        return {
+            localAccuracy: 0,
+            datasetSize: 0,
+            roundsTrained: 0,
+            lastRoundTime: '0s',
+            modelVersion: 'v0.0',
+            nextScheduled: '--',
+            curve: [],
+            recentUploads: [],
+        };
+    }
+}
+
+
+// ── Security & Fault-Tolerance API ────────────────────────────────────
+
+export async function fetchSecuritySummary(): Promise<SecuritySummary> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/security`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, returning empty security data");
+        return {
+            overviewMetrics: [],
+            krum: { method: 'krum', threshold: 0, rounds: [] },
+            cosineSimilarity: { threshold: 0, rounds: [] },
+            rateLimit: { globalLimit: 20, windowSeconds: 60, clients: {}, activeBlocks: 0 },
+            ecdsa: { allVerified: true, algorithm: 'ECDSA-secp256k1', clients: {} },
+            faultTolerance: { heartbeatIntervalSec: 30, deadThreshold: 3, totalRounds: 0, clients: {}, deadClients: [], healthyCount: 0 },
+            recentAttacks: [],
+        };
+    }
+}
+
+export async function fetchAttackTimeline(limit = 50): Promise<AttackEvent[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/security/attacks?limit=${limit}`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+        return data.events || [];
+    } catch {
+        console.warn("Backend unreachable, returning empty attacks");
+        return [];
+    }
+}
+
+export async function fetchFaultTolerance(): Promise<FaultToleranceData> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/security/health`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, returning empty fault-tolerance");
+        return { heartbeatIntervalSec: 30, deadThreshold: 3, totalRounds: 0, clients: {}, deadClients: [], healthyCount: 0 };
+    }
+}
+
+export async function fetchSelfImprovement(): Promise<SelfImprovementPoint[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/improvement`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, returning empty self-improvement");
+        return [];
+    }
+}
+
+
+// ── Schema API ────────────────────────────────────────────────────────
+
+const defaultSchemaFallback: SchemaConfig = {
+    fields: [],
+    exampleFields: [],
+};
+
+export async function fetchSchema(): Promise<SchemaConfig> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/schema`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, falling back to default schema");
+        return defaultSchemaFallback;
+    }
+}
+
+export async function saveSchema(fields: { name: string; type: string; required: boolean; description: string }[]): Promise<SchemaConfig> {
+    const response = await fetch(`${API_BASE_URL}/api/schema`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ fields }),
+    });
+    if (!response.ok) throw new Error('Save failed');
+    return await response.json();
+}
+
+
+// ── Multi-Modal API ───────────────────────────────────────────────────
+
+const defaultMultiModalFallback: MultiModalConfig = {
+    fusionMethod: 'late',
+    modalities: [],
+};
+
+export async function fetchMultiModal(): Promise<MultiModalConfig> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/multimodal`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, falling back to default multimodal config");
+        return defaultMultiModalFallback;
+    }
+}
+
+export async function saveMultiModal(config: MultiModalConfig): Promise<MultiModalConfig> {
+    const response = await fetch(`${API_BASE_URL}/api/multimodal`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(config),
+    });
+    if (!response.ok) throw new Error('Save failed');
+    return await response.json();
+}
+
+
+// ── Bots API ──────────────────────────────────────────────────────────
+
+const defaultBotsFallback: BotsConfig = {
+    platforms: [],
+};
+
+export async function fetchBots(): Promise<BotsConfig> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/bots`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, falling back to default bots config");
+        return defaultBotsFallback;
+    }
+}
+
+export async function toggleBot(platformId: string): Promise<BotsConfig> {
+    const response = await fetch(`${API_BASE_URL}/api/bots/toggle`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ platformId }),
+    });
+    if (!response.ok) throw new Error('Toggle failed');
+    return await response.json();
+}
+
+export async function testBotCommand(command: string): Promise<{ command: string; response: string }> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/bots/test`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ command }),
+        });
+        if (!response.ok) throw new Error('Test failed');
+        return await response.json();
+    } catch {
+        return { command, response: 'Backend unreachable — cannot execute command.' };
+    }
+}
+
+
+// ── Email API ─────────────────────────────────────────────────────────
+
+const defaultEmailFallback: EmailData = {
+    config: { enabled: false, address: '', provider: '', format: '' },
+    logs: [],
+};
+
+export async function fetchEmail(): Promise<EmailData> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/email`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Network error');
+        return await response.json();
+    } catch {
+        console.warn("Backend unreachable, falling back to default email data");
+        return defaultEmailFallback;
+    }
+}
+
+export async function saveEmailConfig(config: { enabled: boolean; address: string; provider: string; format: string }): Promise<EmailData> {
+    const response = await fetch(`${API_BASE_URL}/api/email/config`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(config),
+    });
+    if (!response.ok) throw new Error('Save failed');
+    return await response.json();
+}
+
+export async function sendTestEmail(recipient: string): Promise<{ message: string; log: { id: number; from: string; subject: string; timestamp: string; status: string; rows: number } }> {
+    const response = await fetch(`${API_BASE_URL}/api/email/test`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ recipient }),
+    });
+    if (!response.ok) throw new Error('Test send failed');
+    return await response.json();
 }

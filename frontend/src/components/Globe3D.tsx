@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { CLIENT_ORGS } from '../data/mockData';
+
+/** Client org pin positions for the 3D globe (static UI config) */
+const CLIENT_ORGS = [
+  { name: 'New York',    lat: 40.7128, lng: -74.0060,  color: '#8b5cf6', icon: '🏥' },
+  { name: 'Los Angeles', lat: 34.0522, lng: -118.2437, color: '#ec4899', icon: '🔬' },
+  { name: 'Chicago',     lat: 41.8781, lng: -87.6298,  color: '#06b6d4', icon: '🏛️' },
+  { name: 'Boston',      lat: 42.3601, lng: -71.0589,  color: '#f59e0b', icon: '📊' },
+  { name: 'Seattle',     lat: 47.6062, lng: -122.3321, color: '#10b981', icon: '💻' },
+];
 
 /* ── helpers ──────────────────────────────────────── */
 function latLngToXYZ(lat: number, lng: number, R: number) {

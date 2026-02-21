@@ -1,6 +1,9 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+
+const API_BASE_URL = 'http://localhost:8000';
 
 export interface User {
+  id?: number;
   name: string;
   role: 'admin' | 'client';
   email: string;
@@ -10,49 +13,110 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (role: 'admin' | 'client') => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, role: string, org?: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const DEMO_USERS: Record<string, User> = {
-  admin: {
-    name: 'Dr. Sarah Chen',
-    role: 'admin',
-    email: 'admin@fedlearn.ai',
-    avatar: 'SC',
-    org: 'FedLearn Research',
-  },
-  client: {
-    name: 'Alex Rivera',
-    role: 'client',
-    email: 'alex@hospital-a.org',
-    avatar: 'AR',
-    org: 'Hospital A — Metro General',
-  },
-};
+/** Read token from localStorage */
+export function getToken(): string | null {
+  return localStorage.getItem('fl_token');
+}
+
+/** Build Authorization header object for fetch calls */
+export function getAuthHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // true on mount to check stored token
+  const [error, setError] = useState<string | null>(null);
 
-  const login = (role: 'admin' | 'client') => {
-    setIsLoading(true);
-    // Simulate network delay for realism
-    setTimeout(() => {
-      setUser(DEMO_USERS[role]);
+  // On mount: if a token exists, fetch the user profile
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
       setIsLoading(false);
-    }, 1200);
+      return;
+    }
+    fetch(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Session expired');
+        return res.json();
+      })
+      .then((data) => setUser(data.user as User))
+      .catch(() => {
+        localStorage.removeItem('fl_token');
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(body.detail || 'Login failed');
+      }
+      const data = await res.json();
+      localStorage.setItem('fl_token', data.token);
+      setUser(data.user as User);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Login failed';
+      setError(msg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (name: string, email: string, password: string, role: string, org?: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role, org: org || '' }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: 'Registration failed' }));
+        throw new Error(body.detail || 'Registration failed');
+      }
+      const data = await res.json();
+      localStorage.setItem('fl_token', data.token);
+      setUser(data.user as User);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed';
+      setError(msg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
+    localStorage.removeItem('fl_token');
     setUser(null);
+    setError(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading, error }}>
       {children}
     </AuthContext.Provider>
   );

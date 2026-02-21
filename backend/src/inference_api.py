@@ -3,43 +3,51 @@ from transformers import DistilBertTokenizer
 from src.transformer_model import TransformerWrapper
 import os
 
+# Resolve paths relative to the backend/ directory (not CWD)
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GLOBAL_MODEL_PATH = os.path.join(BACKEND_DIR, "global_model.pth")
+PRETRAINED_PATH = os.path.join(BACKEND_DIR, "pretrained_transformer.pth")
+
 # "Server-Side" API boundary
-# The Streamlit client should only call `predict_sentiment` and should never load weights explicitly.
+# The Streamlit/FastAPI client should only call `predict_sentiment` and never load weights explicitly.
 
 # We load the weights once when the server boots
-model = TransformerWrapper()
-MODEL_PATH = "pretrained_transformer.pth"
-
-# Fallback to the saved simulation global model if present, otherwise use base pretrain
-if os.path.exists("global_model.pth"):
+if os.path.exists(GLOBAL_MODEL_PATH):
+    # global_model.pth was saved via TransformerWrapper.state_dict() (keys include 'model.' prefix)
+    model = TransformerWrapper()
     try:
-        model.load_state_dict(torch.load("global_model.pth"))
-    except:
-        pass
-elif os.path.exists(MODEL_PATH):
-    try:
-        model.load_state_dict(torch.load(MODEL_PATH))
-    except:
-        pass
+        model.load_state_dict(torch.load(GLOBAL_MODEL_PATH, weights_only=True))
+        print(f"Loaded global FL model from {GLOBAL_MODEL_PATH}")
+    except Exception as e:
+        print(f"Warning: Failed to load global model: {e}. Using base weights.")
+elif os.path.exists(PRETRAINED_PATH):
+    # pretrained_transformer.pth was saved as bare DistilBert state_dict (no 'model.' prefix)
+    # TransformerWrapper.__init__ loads it into self.model automatically
+    model = TransformerWrapper(pretrained_path=PRETRAINED_PATH)
+    print(f"Loaded pretrained model from {PRETRAINED_PATH}")
+else:
+    model = TransformerWrapper()
+    print("Warning: No pretrained or global model found. Using base DistilBERT weights.")
 
 model.eval()
 
-# The tokenization happens severely on the server side
+# Tokenization happens on the server side
 tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 
 def predict_sentiment(text: str) -> dict:
     """
-    Simulates an API endpoint.
-    Recieves raw text from the Client UI, processes it through the Server's Transformer, 
-    and returns a simple JSON-serializable dictionary.
+    Server-side inference endpoint.
+    Receives raw text, processes it through the Transformer,
+    and returns a JSON-serializable dictionary with label and confidence.
     """
     
-    # Dynamically reload weights seamlessly so inference responds accurately to freshly run simulations
-    if os.path.exists("global_model.pth"):
+    # Dynamically reload weights if a new global model was produced by FL training
+    if os.path.exists(GLOBAL_MODEL_PATH):
         try:
-            model.load_state_dict(torch.load("global_model.pth", weights_only=True))
-        except:
-            pass
+            model.load_state_dict(torch.load(GLOBAL_MODEL_PATH, weights_only=True))
+            model.eval()
+        except Exception as e:
+            print(f"Warning: Failed to hot-reload global model: {e}")
             
     encoding = tokenizer(
         text,
@@ -55,7 +63,7 @@ def predict_sentiment(text: str) -> dict:
         
         pred_idx = torch.argmax(logits, dim=1).item()
         
-        # We assume 0 is negative, 1 is positive based on IMDB datasets defaults
+        # 0 = negative, 1 = positive (IMDB dataset convention)
         pred_label = "Positive" if pred_idx == 1 else "Negative"
         confidence = float(probs[pred_idx] * 100)
         

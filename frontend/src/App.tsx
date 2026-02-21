@@ -6,7 +6,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'admin' | 'client' }) {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <Navigate to="/" replace />;
   return <>{children}</>;

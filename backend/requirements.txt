@@ -2,7 +2,7 @@ torch
 torchvision
 numpy
 tqdm
-flwr[simulation]
+flwr[simulation]==1.0.0
 matplotlib
 streamlit
 transformers
@@ -10,3 +10,7 @@ datasets
 fastapi
 uvicorn
 python-multipart
+psycopg[binary]
+PyJWT
+bcrypt
+pandas

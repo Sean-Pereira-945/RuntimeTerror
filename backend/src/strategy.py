@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import time
 import flwr as fl
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Union
@@ -9,14 +10,35 @@ from src.transformer_model import TransformerWrapper
 from flwr.common import FitRes, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
 
+# Resolve paths relative to backend/ directory
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GLOBAL_MODEL_PATH = os.path.join(BACKEND_DIR, "global_model.pth")
+
 class SaveMetricsStrategy(fl.server.strategy.FedAvg):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.metrics_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "fl_metrics.json")
+        self.metrics_file = os.path.join(BACKEND_DIR, "data", "fl_metrics.json")
         os.makedirs(os.path.dirname(self.metrics_file), exist_ok=True)
-        # Initialize or clear
+        # Initialize or clear metrics file
         with open(self.metrics_file, "w") as f:
             json.dump([], f)
+        
+        # Create model shell once for weight injection (avoids re-downloading every round)
+        self._model = TransformerWrapper()
+        
+        # Map Flower UUID client IDs → sequential integers (0, 1, 2)
+        self.client_id_map: Dict[str, int] = {}
+        self._next_client_id = 0
+        
+        # Track round start times for duration calculation
+        self._round_start_time: Optional[float] = None
+
+    def _get_sequential_id(self, flower_cid: str) -> int:
+        """Map a Flower UUID client ID to a stable sequential integer."""
+        if flower_cid not in self.client_id_map:
+            self.client_id_map[flower_cid] = self._next_client_id
+            self._next_client_id += 1
+        return self.client_id_map[flower_cid]
 
     def aggregate_fit(
         self,
@@ -25,29 +47,29 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         
+        self._round_start_time = time.time()
+        
+        # Register client IDs during fit
+        for client, _ in results:
+            self._get_sequential_id(client.cid)
+        
         aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
         
         if aggregated_parameters is not None:
             # Convert Flower Parameters back to NumPy arrays
             ndarrays = parameters_to_ndarrays(aggregated_parameters)
             
-            # Load the base model structure to inject weights
-            model = TransformerWrapper()
-            
-            # Get the current state_dict, which gives us the keys and shapes of PyTorch tensors
-            state_dict = model.state_dict()
-            
-            # Map NumPy arrays back to PyTorch Tensors based on the state_dict ordered architecture
-            # NOTE: We assume the client side `get_parameters` yielded them in exactly deterministic order
+            # Get the model state_dict keys and inject aggregated weights
+            state_dict = self._model.state_dict()
             keys = list(state_dict.keys())
             for key, array in zip(keys, ndarrays):
                 state_dict[key] = torch.tensor(array)
             
-            # Update the base model structure with the federated weights
-            model.load_state_dict(state_dict, strict=True)
+            self._model.load_state_dict(state_dict, strict=True)
             
-            # Persist dynamically so inference endpoints pick it up natively
-            torch.save(model.state_dict(), "global_model.pth")
+            # Persist so inference endpoints pick it up
+            torch.save(self._model.state_dict(), GLOBAL_MODEL_PATH)
+            print(f"[Round {server_round}] Saved aggregated model to {GLOBAL_MODEL_PATH}")
             
         return aggregated_parameters, aggregated_metrics
 
@@ -61,17 +83,23 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
         
         aggregated_loss, aggregated_metrics = super().aggregate_evaluate(server_round, results, failures)
         
+        # Calculate round duration
+        duration_s = 0.0
+        if self._round_start_time is not None:
+            duration_s = time.time() - self._round_start_time
+        
         if aggregated_loss is not None:
-            # Gather client accuracies
+            # Gather client accuracies with mapped sequential IDs
             client_metrics = []
             for client, res in results:
+                seq_id = self._get_sequential_id(client.cid)
                 client_metrics.append({
-                    "client_id": client.cid,
+                    "client_id": seq_id,
                     "accuracy": res.metrics.get("accuracy", 0.0) if res.metrics else 0.0,
                     "loss": float(res.loss)
                 })
             
-            # Compute global average accuracy since FedAvg default doesn't implicitly return it
+            # Compute global average accuracy
             if client_metrics:
                 global_accuracy = sum(c["accuracy"] for c in client_metrics) / len(client_metrics)
             else:
@@ -83,7 +111,7 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
                 "globalAccuracy": float(global_accuracy),
                 "loss": float(aggregated_loss),
                 "participants": len(results),
-                "duration": "0.0s",
+                "duration": f"{duration_s:.1f}s",
                 "status": "completed",
                 "client_metrics": client_metrics
             }
@@ -98,46 +126,7 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
 
             with open(self.metrics_file, "w") as f:
                 json.dump(data, f, indent=2)
+            
+            print(f"[Round {server_round}] Global accuracy: {global_accuracy*100:.1f}%, Loss: {aggregated_loss:.4f}, Duration: {duration_s:.1f}s")
 
         return aggregated_loss, aggregated_metrics
-
-class AsyncMedianStrategy(fl.server.strategy.FedAvg):
-    def __init__(self, k_buffer_size=3, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Buffer to store the last K updates for pseudo-async median
-        self.K = k_buffer_size
-        self.update_buffer = []
-
-    def aggregate_fit(
-        self,
-        server_round: int,
-        results: List[Tuple[ClientProxy, FitRes]],
-        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
-    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-        if not results:
-            return None, {}
-        
-        # Convert results to ndarrays
-        weights_results = [
-            (parameters_to_ndarrays(fit_res.parameters), fit_res.num_examples)
-            for _, fit_res in results
-        ]
-        
-        # Add to buffer
-        for weights, num_examples in weights_results:
-            self.update_buffer.append(weights)
-            
-        # Keep only the last K updates
-        if len(self.update_buffer) > self.K:
-            self.update_buffer = self.update_buffer[-self.K:]
-            
-        # Compute median across the buffer.
-        # This is robust against outlier/malicious updates.
-        median_weights = []
-        for layer_idx in range(len(self.update_buffer[0])):
-            layer_updates = [buffer_weights[layer_idx] for buffer_weights in self.update_buffer]
-            median_weights.append(np.median(layer_updates, axis=0))
-            
-        parameters_aggregated = ndarrays_to_parameters(median_weights)
-
-        return parameters_aggregated, {}
