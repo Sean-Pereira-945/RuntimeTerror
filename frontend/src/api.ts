@@ -7,7 +7,6 @@ import type {
     SchemaConfig,
     MultiModalConfig,
     BotsConfig,
-    EmailData,
 } from './data/securityMockData';
 import type { MetricCard, Client, TrainingRound } from './data/mockData';
 import { getAuthHeaders } from './context/AuthContext';
@@ -323,42 +322,3 @@ export async function testBotCommand(command: string): Promise<{ command: string
 }
 
 
-// ── Email API ─────────────────────────────────────────────────────────
-
-const defaultEmailFallback: EmailData = {
-    config: { enabled: false, address: '', provider: '', format: '' },
-    logs: [],
-};
-
-export async function fetchEmail(): Promise<EmailData> {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/email`, {
-            headers: authHeaders(),
-        });
-        if (!response.ok) throw new Error('Network error');
-        return await response.json();
-    } catch {
-        console.warn("Backend unreachable, falling back to default email data");
-        return defaultEmailFallback;
-    }
-}
-
-export async function saveEmailConfig(config: { enabled: boolean; address: string; provider: string; format: string }): Promise<EmailData> {
-    const response = await fetch(`${API_BASE_URL}/api/email/config`, {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(config),
-    });
-    if (!response.ok) throw new Error('Save failed');
-    return await response.json();
-}
-
-export async function sendTestEmail(recipient: string): Promise<{ message: string; log: { id: number; from: string; subject: string; timestamp: string; status: string; rows: number } }> {
-    const response = await fetch(`${API_BASE_URL}/api/email/test`, {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ recipient }),
-    });
-    if (!response.ok) throw new Error('Test send failed');
-    return await response.json();
-}

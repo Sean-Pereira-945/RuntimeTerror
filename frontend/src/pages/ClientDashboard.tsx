@@ -28,7 +28,6 @@ import type { ClientPersonalData } from '../api';
 import DynamicSchemaPanel from '../components/charts/DynamicSchemaPanel';
 import MultiModalPanel from '../components/charts/MultiModalPanel';
 import BotIntegrationPanel from '../components/charts/BotIntegrationPanel';
-import EmailTrainingPanel from '../components/charts/EmailTrainingPanel';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
@@ -492,13 +491,10 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Bot + Email Integration Panels */}
-        <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        {/* Bot Integration Panel */}
+        <div className={`mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="animate-fade-in" style={{ animationDelay: '700ms' }}>
             <BotIntegrationPanel />
-          </div>
-          <div className="animate-fade-in" style={{ animationDelay: '800ms' }}>
-            <EmailTrainingPanel />
           </div>
         </div>
       </main>

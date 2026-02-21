@@ -32,8 +32,6 @@ from src.database import (
     save_fl_round,
     get_config,
     set_config,
-    get_email_logs,
-    add_email_log,
     get_attack_events,
     save_attack_event,
     get_client_uptimes_db,
@@ -398,16 +396,6 @@ class BotToggleRequest(BaseModel):
 class BotTestRequest(BaseModel):
     command: str
 
-class EmailConfigRequest(BaseModel):
-    enabled: bool
-    address: str
-    provider: str
-    format: str
-
-class EmailTestRequest(BaseModel):
-    recipient: str
-
-
 # ── Defaults (used when DB has no entry yet) ──────────────────────────
 
 DEFAULT_SCHEMA = {
@@ -437,13 +425,6 @@ DEFAULT_BOTS = {
         {"id": "whatsapp", "name": "WhatsApp", "icon": "chat", "color": "#25D366", "connected": False, "webhook": "https://graph.facebook.com/v18.0/****/messages", "commands": ["!train", "!status", "!predict <text>", "!metrics"]},
         {"id": "discord",  "name": "Discord",  "icon": "game", "color": "#5865F2", "connected": False, "webhook": "https://discord.com/api/webhooks/****/****", "commands": ["/fl-train", "/fl-status", "/fl-predict", "/fl-metrics"]},
     ]
-}
-
-DEFAULT_EMAIL_CONFIG = {
-    "enabled": False,
-    "address": "",
-    "provider": "",
-    "format": "csv_attachment",
 }
 
 
@@ -498,25 +479,6 @@ def api_bot_test(req: BotTestRequest, user: dict = Depends(get_current_user)):
     return bot_test_command(req.command)
 
 
-# ── Email ─────────────────────────────────────────────────────────────
-
-@app.get("/api/email")
-def api_get_email(user: dict = Depends(get_current_user)):
-    config = get_config("email_config") or DEFAULT_EMAIL_CONFIG
-    logs = get_email_logs()
-    return {"config": config, "logs": logs}
-
-@app.post("/api/email/config")
-def api_save_email_config(req: EmailConfigRequest, admin: dict = Depends(require_role("admin"))):
-    cfg = {"enabled": req.enabled, "address": req.address, "provider": req.provider, "format": req.format}
-    set_config("email_config", cfg)
-    logs = get_email_logs()
-    return {"config": cfg, "logs": logs}
-
-@app.post("/api/email/test")
-def api_email_test(req: EmailTestRequest, user: dict = Depends(get_current_user)):
-    log_entry = add_email_log(sender=req.recipient, subject="Test CSV — pipeline validation", status="processed", rows=50)
-    return {"message": f"Test email sent to {req.recipient}", "log": log_entry}
 
 
 # ── Self-Improvement ──────────────────────────────────────────────────

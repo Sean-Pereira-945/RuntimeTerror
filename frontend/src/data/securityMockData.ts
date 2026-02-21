@@ -163,24 +163,5 @@ export interface BotsConfig {
   platforms: BotPlatform[];
 }
 
-// ── Email Training ───────────────────────────────────────────────────
-export interface EmailConfig {
-  enabled: boolean;
-  address: string;
-  provider: string;
-  format: 'csv_attachment' | 'inline_text' | 'link';
-}
-export interface EmailLog {
-  id: number;
-  from: string;
-  subject: string;
-  timestamp: string;
-  status: 'processed' | 'rejected' | 'pending';
-  rows: number;
-}
-export interface EmailData {
-  config: EmailConfig;
-  logs: EmailLog[];
-}
 
 
