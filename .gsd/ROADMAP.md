@@ -32,3 +32,7 @@
 ### Phase 5: Large-Scale Pretraining & Transformer Upgrade
 **Status**: ✅ Complete
 **Objective**: Upgrade the text pipeline to download and pretrain on a 20,000+ sample text sentiment dataset. Upgrade the model to a HuggingFace Transformer (with LSTM fallback). Ensure the Streamlit UI inference logic correctly routes client data to the server model and returns the prediction result back to the user/client.
+
+### Phase 6: FL Server Stability & Port Binding Fix
+**Status**: ⬜ Not Started
+**Objective**: Fix the `Failed to bind to address 127.0.0.1:8080` error occurring when the Streamlit app restarts or triggers the federated learning simulation multiple times. Ensure the background threads and gRPC server are gracefully terminated and the port is freed before attempting to restart the simulation.
