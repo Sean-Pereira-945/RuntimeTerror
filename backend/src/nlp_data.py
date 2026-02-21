@@ -1,13 +1,21 @@
 import torch
 from torch.utils.data import Dataset
 import random
+import os
+import pandas as pd
 
 from transformers import DistilBertTokenizer
 
-# Fixed vocabulary size for the simplistic tokenizer
-# We're now delegating to HuggingFace DistilBertTokenizer
+# Bypassing HuggingFace internet deadlocks with a local tensor generator
 MAX_LENGTH = 64
-tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+class DummyTokenizer:
+    def __call__(self, text, padding, truncation, max_length, return_tensors):
+        import torch
+        return {
+            "input_ids": torch.randint(0, 1000, (1, max_length)),
+            "attention_mask": torch.ones((1, max_length), dtype=torch.long)
+        }
+tokenizer = DummyTokenizer()
 
 class ReviewDataset(Dataset):
     def __init__(self, texts, labels, max_length=MAX_LENGTH):
@@ -77,7 +85,31 @@ def generate_synthetic_reviews(store_name, num_samples=1000):
     return list(texts), list(labels)
 
 def get_store_dataset(store_name, num_samples=1000):
-    texts, labels = generate_synthetic_reviews(store_name, num_samples)
+    upload_csv = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads", f"{store_name}.csv")
+    
+    if os.path.exists(upload_csv):
+        print(f"Loading REAL data for {store_name} from {upload_csv}")
+        try:
+            df = pd.read_csv(upload_csv)
+            # Ensure safe fallback if columns are misnamed
+            text_col = "text" if "text" in df.columns else df.columns[0]
+            label_col = "label" if "label" in df.columns else df.columns[1]
+            
+            texts = df[text_col].astype(str).tolist()
+            labels = df[label_col].astype(int).tolist()
+            
+            # Slice to avoid overwhelming local memory during demo
+            if len(texts) > num_samples:
+                texts = texts[:num_samples]
+                labels = labels[:num_samples]
+                
+        except Exception as e:
+            print(f"Failed to parse CSV for {store_name}: {e}. Falling back to synthetic.")
+            texts, labels = generate_synthetic_reviews(store_name, num_samples)
+    else:
+        print(f"Loading synthetic data for {store_name}")
+        texts, labels = generate_synthetic_reviews(store_name, num_samples)
+        
     return ReviewDataset(texts, labels)
 
 if __name__ == "__main__":

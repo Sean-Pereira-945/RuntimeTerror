@@ -74,3 +74,21 @@ export async function startTraining() {
         throw error;
     }
 }
+
+export async function uploadClientData(clientId: string, file: File) {
+    const formData = new FormData();
+    formData.append('client_id', clientId);
+    formData.append('file', file);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!response.ok) throw new Error('Upload failed');
+        return await response.json();
+    } catch (error) {
+        console.warn("Backend unreachable for upload");
+        throw error;
+    }
+}

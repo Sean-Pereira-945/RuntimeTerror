@@ -1,8 +1,69 @@
+import os
+import json
+from datetime import datetime
 import flwr as fl
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Union
 from flwr.common import FitRes, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
+
+class SaveMetricsStrategy(fl.server.strategy.FedAvg):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.metrics_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "fl_metrics.json")
+        os.makedirs(os.path.dirname(self.metrics_file), exist_ok=True)
+        # Initialize or clear
+        with open(self.metrics_file, "w") as f:
+            json.dump([], f)
+
+    def aggregate_evaluate(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, fl.common.EvaluateRes]],
+        failures: List[Union[Tuple[ClientProxy, fl.common.EvaluateRes], BaseException]],
+    ) -> Tuple[Optional[float], Dict[str, fl.common.Scalar]]:
+        
+        aggregated_loss, aggregated_metrics = super().aggregate_evaluate(server_round, results, failures)
+        
+        if aggregated_loss is not None:
+            # Gather client accuracies
+            client_metrics = []
+            for client, res in results:
+                client_metrics.append({
+                    "client_id": client.cid,
+                    "accuracy": res.metrics.get("accuracy", 0.0) if res.metrics else 0.0,
+                    "loss": float(res.loss)
+                })
+            
+            # Compute global average accuracy since FedAvg default doesn't implicitly return it
+            if client_metrics:
+                global_accuracy = sum(c["accuracy"] for c in client_metrics) / len(client_metrics)
+            else:
+                global_accuracy = 0.0
+
+            round_data = {
+                "round": server_round,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "globalAccuracy": float(global_accuracy),
+                "loss": float(aggregated_loss),
+                "participants": len(results),
+                "duration": "0.0s",
+                "status": "completed",
+                "client_metrics": client_metrics
+            }
+
+            try:
+                with open(self.metrics_file, "r") as f:
+                    data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                data = []
+            
+            data.append(round_data)
+
+            with open(self.metrics_file, "w") as f:
+                json.dump(data, f, indent=2)
+
+        return aggregated_loss, aggregated_metrics
 
 class AsyncMedianStrategy(fl.server.strategy.FedAvg):
     def __init__(self, k_buffer_size=3, *args, **kwargs):

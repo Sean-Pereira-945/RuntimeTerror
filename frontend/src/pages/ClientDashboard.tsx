@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { startTraining as apiStartTraining, predictSentiment } from '../api';
+import { startTraining as apiStartTraining, predictSentiment, uploadClientData } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -92,22 +92,34 @@ export default function ClientDashboard() {
     frame();
   }, []);
 
-  const handleFileSelect = (name: string) => {
-    setUploadedFile(name);
+  const handleFileSelect = async (file: File) => {
+    setUploadedFile(file.name);
     setStatus('uploading');
     setProgress(0);
-    // Simulate upload
+
+    // Simulate upload progress while fetch happens
     let p = 0;
     const interval = setInterval(() => {
-      p += Math.random() * 15 + 5;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
-        setProgress(100);
-        setTimeout(() => setStatus('idle'), 500);
-      }
-      setProgress(Math.min(p, 100));
+      p += Math.random() * 5 + 2;
+      setProgress(Math.min(p, 90)); // Cap fake progress at 90%
     }, 200);
+
+    try {
+      // For demo, we parse exact store names to align with nlp_data.py expected "Phone", "Clothing", "Food"
+      let storeName = 'Phone';
+      if (user?.org.includes('Clothing') || user?.org.includes('BioTech')) storeName = 'Clothing';
+      if (user?.org.includes('Food') || user?.org.includes('Stanford')) storeName = 'Food';
+
+      await uploadClientData(storeName, file);
+
+      clearInterval(interval);
+      setProgress(100);
+      setTimeout(() => setStatus('idle'), 700);
+    } catch (error) {
+      console.error(error);
+      clearInterval(interval);
+      setStatus('idle');
+    }
   };
 
   const startTraining = async () => {
@@ -268,8 +280,8 @@ export default function ClientDashboard() {
             {/* Drop zone */}
             <div
               className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer ${dragActive
-                  ? 'border-violet-500 bg-violet-500/10'
-                  : 'border-white/10 hover:border-white/20 hover:bg-white/[.02]'
+                ? 'border-violet-500 bg-violet-500/10'
+                : 'border-white/10 hover:border-white/20 hover:bg-white/[.02]'
                 }`}
               onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
@@ -278,7 +290,7 @@ export default function ClientDashboard() {
                 e.preventDefault();
                 setDragActive(false);
                 const file = e.dataTransfer.files[0];
-                if (file) handleFileSelect(file.name);
+                if (file) handleFileSelect(file);
               }}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -289,7 +301,7 @@ export default function ClientDashboard() {
                 accept=".csv,.json,.parquet"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) handleFileSelect(file.name);
+                  if (file) handleFileSelect(file);
                 }}
               />
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
@@ -348,11 +360,11 @@ export default function ClientDashboard() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm dark:text-slate-300 text-slate-700 font-medium">Training Status</span>
                 <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status === 'training' ? 'bg-amber-500/15 text-amber-400' :
-                    status === 'complete' ? 'bg-emerald-500/15 text-emerald-400' :
-                      'bg-slate-500/15 text-slate-400'
+                  status === 'complete' ? 'bg-emerald-500/15 text-emerald-400' :
+                    'bg-slate-500/15 text-slate-400'
                   }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${status === 'training' ? 'bg-amber-500 animate-pulse' :
-                      status === 'complete' ? 'bg-emerald-500' : 'bg-slate-500'
+                    status === 'complete' ? 'bg-emerald-500' : 'bg-slate-500'
                     }`} />
                   {status === 'training' ? 'Training...' : status === 'complete' ? 'Complete!' : 'Ready'}
                 </span>
@@ -393,8 +405,8 @@ export default function ClientDashboard() {
                 onClick={startTraining}
                 disabled={status === 'training' || status === 'uploading'}
                 className={`w-full py-3.5 rounded-xl font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${status === 'complete'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-xl hover:shadow-emerald-500/20'
-                    : 'bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-xl hover:shadow-emerald-500/20'
+                  : 'bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30'
                   }`}
               >
                 {status === 'training' ? (

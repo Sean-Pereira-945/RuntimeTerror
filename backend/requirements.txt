@@ -2,10 +2,11 @@ torch
 torchvision
 numpy
 tqdm
-flwr[simulation]==1.0.0
+flwr[simulation]
 matplotlib
 streamlit
 transformers
 datasets
 fastapi
 uvicorn
+python-multipart
