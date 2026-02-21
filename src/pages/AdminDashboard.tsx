@@ -4,15 +4,21 @@ import MetricsCard from '../components/MetricsCard';
 import AccuracyCurve from '../components/charts/AccuracyCurve';
 import ClientComparison from '../components/charts/ClientComparison';
 import TrainingHistoryTable from '../components/charts/TrainingHistoryTable';
-import { adminMetrics, clients } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
+import { fetchMetrics, fetchClients } from '../api';
+import type { MetricCard, Client } from '../data/mockData';
+
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [adminMetrics, setAdminMetrics] = useState<MetricCard[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
+    fetchMetrics().then(data => setAdminMetrics(data.adminMetrics || []));
+    fetchClients().then(data => setClients(data.clients || []));
     const timer = setTimeout(() => setLoaded(true), 100);
     return () => clearTimeout(timer);
   }, []);
@@ -39,9 +45,8 @@ export default function AdminDashboard() {
 
       {/* Main content */}
       <main
-        className={`transition-all duration-300 ${
-          sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-        } p-4 sm:p-6 lg:p-8`}
+        className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+          } p-4 sm:p-6 lg:p-8`}
       >
         {/* Header */}
         <div className={`mb-8 transition-all duration-500 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>

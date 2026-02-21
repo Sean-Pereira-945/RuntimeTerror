@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { startTraining as apiStartTraining, predictSentiment } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,6 +43,11 @@ export default function ClientDashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Inference state
+  const [inferenceText, setInferenceText] = useState('');
+  const [inferenceResult, setInferenceResult] = useState<{ label: string; confidence: number } | null>(null);
+  const [inferring, setInferring] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 100);
@@ -104,9 +110,15 @@ export default function ClientDashboard() {
     }, 200);
   };
 
-  const startTraining = () => {
+  const startTraining = async () => {
     setStatus('training');
     setProgress(0);
+    try {
+      await apiStartTraining();
+    } catch (e) {
+      console.warn("API failed, simulating training");
+    }
+
     let p = 0;
     const interval = setInterval(() => {
       p += Math.random() * 3 + 1;
@@ -171,6 +183,55 @@ export default function ClientDashboard() {
                 Welcome, <span className="text-blue-400 font-medium">{user?.name}</span> — {user?.org}
               </p>
             </div>
+
+            {/* Live Inference Judge Demo Card (Compact) */}
+            <div className="flex-1 max-w-sm glass rounded-xl p-3 border border-white/10 ml-4 hidden md:block">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-300">Live Inference (Demo)</span>
+                {inferenceResult && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${inferenceResult.label === 'Positive' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {inferenceResult.label} ({inferenceResult.confidence.toFixed(1)}%)
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inferenceText}
+                  onChange={(e) => setInferenceText(e.target.value)}
+                  placeholder="e.g. 'hate this phone'"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500"
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && inferenceText) {
+                      setInferring(true);
+                      try {
+                        const res = await predictSentiment(inferenceText);
+                        setInferenceResult(res);
+                      } finally {
+                        setInferring(false);
+                      }
+                    }
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (!inferenceText) return;
+                    setInferring(true);
+                    try {
+                      const res = await predictSentiment(inferenceText);
+                      setInferenceResult(res);
+                    } finally {
+                      setInferring(false);
+                    }
+                  }}
+                  disabled={inferring}
+                  className="bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                >
+                  Predict
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -206,11 +267,10 @@ export default function ClientDashboard() {
 
             {/* Drop zone */}
             <div
-              className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer ${
-                dragActive
+              className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer ${dragActive
                   ? 'border-violet-500 bg-violet-500/10'
                   : 'border-white/10 hover:border-white/20 hover:bg-white/[.02]'
-              }`}
+                }`}
               onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
               onDragOver={(e) => e.preventDefault()}
@@ -287,15 +347,13 @@ export default function ClientDashboard() {
             <div className="rounded-xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 p-6 mb-6 border border-white/5">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm dark:text-slate-300 text-slate-700 font-medium">Training Status</span>
-                <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
-                  status === 'training' ? 'bg-amber-500/15 text-amber-400' :
-                  status === 'complete' ? 'bg-emerald-500/15 text-emerald-400' :
-                  'bg-slate-500/15 text-slate-400'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    status === 'training' ? 'bg-amber-500 animate-pulse' :
-                    status === 'complete' ? 'bg-emerald-500' : 'bg-slate-500'
-                  }`} />
+                <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status === 'training' ? 'bg-amber-500/15 text-amber-400' :
+                    status === 'complete' ? 'bg-emerald-500/15 text-emerald-400' :
+                      'bg-slate-500/15 text-slate-400'
+                  }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${status === 'training' ? 'bg-amber-500 animate-pulse' :
+                      status === 'complete' ? 'bg-emerald-500' : 'bg-slate-500'
+                    }`} />
                   {status === 'training' ? 'Training...' : status === 'complete' ? 'Complete!' : 'Ready'}
                 </span>
               </div>
@@ -334,11 +392,10 @@ export default function ClientDashboard() {
               <button
                 onClick={startTraining}
                 disabled={status === 'training' || status === 'uploading'}
-                className={`w-full py-3.5 rounded-xl font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${
-                  status === 'complete'
+                className={`w-full py-3.5 rounded-xl font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${status === 'complete'
                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-xl hover:shadow-emerald-500/20'
                     : 'bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30'
-                }`}
+                  }`}
               >
                 {status === 'training' ? (
                   <span className="flex items-center justify-center gap-2">
