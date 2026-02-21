@@ -13,7 +13,7 @@ from src.strategy import SaveMetricsStrategy
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRETRAINED_PATH = os.path.join(BACKEND_DIR, "pretrained_transformer.pth")
 
-NUM_ROUNDS = 10
+NUM_ROUNDS = 2
 SERVER_ADDRESS = "127.0.0.1:8080"
 
 def run_server(num_clients):
@@ -36,15 +36,20 @@ def run_client_process(cid):
     stores = ["Phone", "Clothing", "Food"]
     store_name = stores[int(cid)]
     
-    dataset = get_store_dataset(store_name, num_samples=200)
+    dataset = get_store_dataset(store_name, num_samples=5)
     model = TransformerWrapper(PRETRAINED_PATH if os.path.exists(PRETRAINED_PATH) else None)
+    
+    # Intentionally trigger the Malicious Update bounds for Client 1 by injecting absurd learning rate
+    malicious_lr = 50.0 if cid == 1 else 2e-5
+    
     client = NLPClient(
         client_id=int(cid),
         store_name=store_name,
         model=model,
         dataset=dataset,
-        lr=2e-5,
-        device=device
+        lr=malicious_lr,
+        device=device,
+        low_compute_proxy=False
     )
     
     # Retry connection with exponential backoff in case the server isn't ready yet

@@ -69,15 +69,15 @@ class SaveMetricsStrategy(fl.server.strategy.FedProx):
             # Extract parameters and compute L2 norm
             for client, fit_res in results:
                 ndarrays = parameters_to_ndarrays(fit_res.parameters)
-                norm = np.sqrt(sum(np.sum(np.square(x)) for x in ndarrays))
+                norm = np.sqrt(sum(np.sum(np.square(x.astype(np.float32))) for x in ndarrays))
                 param_norms.append(norm)
                 
-            median_norm = np.median(param_norms)
+            valid_norms = [n for n in param_norms if np.isfinite(n)]
+            median_norm = np.median(valid_norms) if valid_norms else 0.0
             
             for (client, fit_res), norm in zip(results, param_norms):
-                # If norm is > 3x the median norm, consider it malicious/poisoned
-                if norm > 3 * median_norm and median_norm > 0:
-                    print(f"⚠️ [Round {server_round}] Filtered malicious client {client.cid} (Norm: {norm:.2f} > 3x Median: {median_norm:.2f})")
+                if not np.isfinite(norm) or (norm > 3 * median_norm and median_norm > 0):
+                    print(f"WARNING: [Round {server_round}] Filtered malicious client {client.cid} (Norm: {norm:.2f} > 3x Median: {median_norm:.2f})")
                 else:
                     valid_results.append((client, fit_res))
             
@@ -85,7 +85,7 @@ class SaveMetricsStrategy(fl.server.strategy.FedProx):
             
             # If all results were filtered out
             if not results:
-                print(f"⚠️ [Round {server_round}] All client updates were filtered as malicious!")
+                print(f"WARNING: [Round {server_round}] All client updates were filtered as malicious!")
                 return None, {}
                 
         aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)

@@ -52,7 +52,6 @@ Built for **DevHacks 2026**.
 RuntimeTerror/
 ├── backend/
 │   ├── api.py                  # FastAPI app — all REST endpoints
-│   ├── app.py                  # Streamlit judge demo (legacy)
 │   ├── requirements.txt
 │   └── src/
 │       ├── auth.py             # JWT + bcrypt authentication
