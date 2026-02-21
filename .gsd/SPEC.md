@@ -13,6 +13,11 @@ Build a privacy-preserving federated learning system that acts as an Amazon/Goog
 5. Build a Streamlit web app showing a live accuracy plot and live predictions.
 6. Provide a user interface where inference strictly occurs to help the client understand the results (model is server-side, but prediction interpretations are returned to the client).
 7. Working prototype with reproducible results.
+8. Implement security sanitization against malicious data using Krum and Cosine Similarity aggregation.
+9. Implement fault tolerance with heartbeat monitoring and DDoS resistance via rate limiting.
+10. Support dynamic schema selection with varying column mappings across clients.
+11. Advanced visualizations including accuracy heatmaps and self-model improvement metrics.
+12. Ensure strict tech stack compliance: Python (Backend) and React/Tailwind/TS (Frontend).
 
 ## Non-Goals (Out of Scope)
 - Deployment in a real-world production environment (focusing on prototype/simulation)

@@ -1,10 +1,12 @@
-from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import subprocess
 import os
 import json
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List
 
 from src.inference_api import predict_sentiment
 from src.security import (
@@ -44,6 +46,53 @@ from src.features import (
 app = FastAPI(title="FL Server API")
 
 # Allow React dev server
+# ── Rate Limiting Middleware ──────────────────────────────────────────
+
+# Simple in-memory rate limiter: { IP/ClientID : [timestamps] }
+REQUEST_LOGS: Dict[str, List[float]] = {}
+LIMIT = 20
+WINDOW = 60
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Skip rate limiting for static/swagger if needed, but let's apply to /api/predict
+    if request.url.path == "/api/predict":
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        if client_ip not in REQUEST_LOGS:
+            REQUEST_LOGS[client_ip] = []
+        
+        # Clean old timestamps
+        REQUEST_LOGS[client_ip] = [ts for ts in REQUEST_LOGS[client_ip] if now - ts < WINDOW]
+        
+        if len(REQUEST_LOGS[client_ip]) >= LIMIT:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Max 20 requests per minute.")
+        
+        REQUEST_LOGS[client_ip].append(now)
+    
+    response = await call_next(request)
+    return response
+
+# ── Heartbeat Tracking ────────────────────────────────────────────────
+
+HEARTBEATS: Dict[str, datetime] = {}
+HEARTBEAT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "heartbeats.json")
+
+def _save_heartbeats():
+    os.makedirs(os.path.dirname(HEARTBEAT_FILE), exist_ok=True)
+    with open(HEARTBEAT_FILE, "w") as f:
+        # Convert datetime objects to ISO strings for JSON serialization
+        json_data = {k: v.isoformat() for k, v in HEARTBEATS.items()}
+        json.dump(json_data, f)
+
+@app.get("/api/heartbeat")
+def heartbeat(user: dict = Depends(get_current_user)):
+    org = user.get("org", "unknown")
+    HEARTBEATS[org] = datetime.now()
+    _save_heartbeats()
+    return {"status": "ok", "timestamp": HEARTBEATS[org]}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5173", "http://localhost:3000"],
@@ -583,5 +632,5 @@ def api_bot_test(req: BotTestRequest, user: dict = Depends(get_current_user)):
 # ── Self-Improvement ──────────────────────────────────────────────────
 
 @app.get("/api/improvement")
-def api_get_improvement(user: dict = Depends(get_current_user)):
-    return get_self_improvement()
+def api_get_improvement(client_id: str | None = None, user: dict = Depends(get_current_user)):
+    return get_self_improvement(client_id)

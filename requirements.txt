@@ -1,9 +1,0 @@
-torch
-torchvision
-numpy
-tqdm
-flwr[simulation]==1.0.0
-matplotlib
-streamlit
-transformers
-datasets

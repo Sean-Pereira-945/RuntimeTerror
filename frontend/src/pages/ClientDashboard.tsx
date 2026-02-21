@@ -27,8 +27,7 @@ import {
 import { fetchClientPersonal } from '../api';
 import type { ClientPersonalData } from '../api';
 import DynamicSchemaPanel from '../components/charts/DynamicSchemaPanel';
-import MultiModalPanel from '../components/charts/MultiModalPanel';
-import BotIntegrationPanel from '../components/charts/BotIntegrationPanel';
+import AccuracyHeatmap from '../components/charts/AccuracyHeatmap';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
@@ -428,7 +427,7 @@ export default function ClientDashboard() {
 
                 <button
                   onClick={handleConfirmColumns}
-                  disabled={!textCol || !labelCol || status === 'uploading'}
+                  disabled={!textCol || !labelCol}
                   className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                 >
                   Confirm & Save Dataset
@@ -552,37 +551,42 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Personal Accuracy Chart */}
-        <div className={`rounded-2xl glass p-5 sm:p-6 transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <div className="flex items-center justify-between mb-4">
+        {/* Simplified Accuracy Trend */}
+        <div className={`rounded-2xl glass p-6 mb-8 transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold dark:text-white text-slate-900">Your Training History</h3>
-              <p className="text-xs dark:text-slate-400 text-slate-500 mt-0.5">Local accuracy over {dynamicRounds} federated rounds</p>
+              <h3 className="font-semibold dark:text-white text-slate-900">Performance Status</h3>
+              <p className="text-xs dark:text-slate-400 text-slate-500 mt-1">
+                Your model's contribution to the global intelligence
+              </p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 font-medium">
-              {dynamicAccuracy}% current
+            <div className="text-right">
+              <div className={`text-2xl font-bold ${dynamicAccuracy >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {dynamicAccuracy}%
+              </div>
+              <div className="text-[10px] dark:text-slate-500 text-slate-400 uppercase tracking-wider font-medium">
+                Current Local Accuracy
+              </div>
             </div>
           </div>
-          <div className="h-64 sm:h-72">
-            <Line data={personalChartData as any} options={personalChartOpts as any} />
+
+          {/* Simple Trend Indicator */}
+          <div className="mt-4 flex items-center gap-2">
+            <div className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${dynamicCurve.length > 1 && dynamicCurve[dynamicCurve.length - 1] >= dynamicCurve[dynamicCurve.length - 2]
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+              }`}>
+              {dynamicCurve.length > 1 && dynamicCurve[dynamicCurve.length - 1] >= dynamicCurve[dynamicCurve.length - 2] ? 'Improving' : 'Decreasing'}
+            </div>
+            <span className="text-xs dark:text-slate-400 text-slate-500">
+              based on last {dynamicRounds} rounds
+            </span>
           </div>
         </div>
 
-        {/* Dynamic Schema & Multi-Modal Panels */}
-        <div className={`flex flex-col gap-4 sm:gap-6 mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
-            <DynamicSchemaPanel />
-          </div>
-          <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-            <MultiModalPanel />
-          </div>
-        </div>
-
-        {/* Bot Integration Panel */}
-        <div className={`mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <div className="animate-fade-in" style={{ animationDelay: '700ms' }}>
-            <BotIntegrationPanel />
-          </div>
+        {/* Accuracy Heatmap - The only allowed advanced visualization */}
+        <div className={`transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <AccuracyHeatmap />
         </div>
       </main>
     </div>

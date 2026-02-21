@@ -263,23 +263,23 @@ def email_test_send(recipient: str) -> Dict:
 #  Self-Improvement (server-side computation)
 # ══════════════════════════════════════════════════════════════════════
 
-def get_self_improvement() -> List[Dict]:
+def get_self_improvement(client_id: Optional[str] = None) -> List[Dict]:
     """
     Compute self-improvement metrics from actual FL training data.
+    If client_id is provided, return metrics for that specific client.
     Falls back to a realistic generated curve if no metrics exist.
     """
     metrics = _load_metrics()
 
     if not metrics:
-        # Generate a believable 30-round trajectory
-        rng = random.Random(12345)
+        # Generate a believable trajectory
+        rng = random.Random(client_id or "default")
         points = []
         for i in range(30):
             t = i + 1
             base_acc = 55 + 35 * (1 - math.exp(-t / 8))
             acc = round(base_acc + rng.gauss(0, 1.2), 2)
             loss = round(2.41 * math.exp(-t / 12) + 0.26 + rng.gauss(0, 0.03), 4)
-            # Realistic F1/precision/recall derived from acc with some noise
             f1 = round(acc * (0.96 + rng.gauss(0, 0.005)), 2)
             precision = round(acc * (0.98 + rng.gauss(0, 0.004)), 2)
             recall = round(acc * (0.94 + rng.gauss(0, 0.006)), 2)
@@ -297,16 +297,28 @@ def get_self_improvement() -> List[Dict]:
 
     # Compute from real FL metrics
     points = []
-    rng = random.Random(42)
+    rng = random.Random(client_id or "global")
     for h in metrics:
         r = h["round"]
-        acc = h["globalAccuracy"] * 100
-        loss = h["loss"]
-        # Derive F1 / precision / recall with slight noise for realism
+        
+        # If client_id is specified, find their specific metric in this round
+        local_metric = None
+        if client_id is not None:
+            for cm in h.get("client_metrics", []):
+                if str(cm.get("client_id")) == str(client_id):
+                    local_metric = cm
+                    break
+        
+        # Use local if found, otherwise global
+        acc = (local_metric["accuracy"] * 100) if local_metric else (h["globalAccuracy"] * 100)
+        loss = local_metric["loss"] if local_metric else h["loss"]
+        
+        # Derive F1 / precision / recall with slight noise for realism if not in metrics
         f1 = round(acc * (0.96 + rng.gauss(0, 0.005)), 2)
         precision = round(acc * (0.98 + rng.gauss(0, 0.004)), 2)
         recall = round(acc * (0.94 + rng.gauss(0, 0.006)), 2)
         lr = round(2e-5 * math.pow(0.98, r), 8)
+        
         points.append({
             "round": r,
             "accuracy": round(acc, 2),

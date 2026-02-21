@@ -7,7 +7,7 @@ from collections import OrderedDict
 import random
 
 class NLPClient(fl.client.NumPyClient):
-    def __init__(self, client_id, store_name, model, dataset, batch_size=32, lr=0.01, device='cpu'):
+    def __init__(self, client_id, store_name, model, dataset, batch_size=32, lr=0.01, device='cpu', low_compute=False):
         self.client_id = client_id
         self.store_name = store_name
         self.device = device
@@ -16,6 +16,7 @@ class NLPClient(fl.client.NumPyClient):
         self.model = model.to(self.device)
         self.dataset = dataset
         self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        self.low_compute = low_compute
         
     def get_parameters(self, config):
         """Return model weights as a list of NumPy ndarrays."""
@@ -32,9 +33,13 @@ class NLPClient(fl.client.NumPyClient):
         self.set_parameters(parameters)
         
         # Asynchronous/Random Epoch simulation (Requirement #3)
-        # We ignore config["epochs"] and pick randomly between 2 and 5.
-        epochs = random.randint(2, 5)
-        print(f"[Client {self.store_name}] Training for {epochs} epochs...")
+        # If low_compute is active, we force 1 epoch to save resources.
+        if self.low_compute:
+            epochs = 1
+            print(f"[Client {self.store_name}] Low-Compute Mode Active. Training for 1 epoch...")
+        else:
+            epochs = random.randint(2, 5)
+            print(f"[Client {self.store_name}] Training for {epochs} epochs...")
         
         self.train(epochs)
         return self.get_parameters(config={}), len(self.dataset), {}
