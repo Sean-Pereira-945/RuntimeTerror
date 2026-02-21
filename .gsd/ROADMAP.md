@@ -44,3 +44,7 @@
 ### Phase 8: Project Restructuring & Architecture Cleanup
 **Status**: ✅ Complete
 **Objective**: Clean up the monorepo file structure separating React logic to `frontend/` and Python logic entirely to `backend/`. Remove identically duplicated source files, migrate Streamlit UI `app.py` to `backend/`, and correct all relative Python imports to stabilize execution modules across the stack.
+
+### Phase 9: Live FL Metrics & Client Data Integration
+**Status**: ⬜ Not Started
+**Objective**: Change the dashboard graphs to reflect actual model training results rather than mock data. Enable clients to upload real data (CSV), which is then used by their local client node during the FL simulation. The server orchestrates FedAvg to update the pretrained global model using these actual client weights, while bridging real-time telemetry (accuracy, loss) back to the React dashboards.
