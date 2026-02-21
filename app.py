@@ -1,9 +1,8 @@
 import streamlit as st
-import threading
+import subprocess
 import time
 import os
 
-from src.main import execute_simulation
 from src.inference_api import predict_sentiment
 
 st.set_page_config(page_title="Federated Review Analyzer", layout="wide")
@@ -22,13 +21,13 @@ if "training_complete" not in st.session_state:
     st.session_state.training_complete = False
 
 def run_fl_background():
-    # Run the FL simulation (which saves global_model.pth if we hooked it up, 
-    # but for prototype we just execute the loop to prove the architecture runs)
+    # Spawn the FL simulation as a completely separate OS process.
+    # This guarantees that when the simulation stops (or crashes), the OS tears down the process
+    # and reclaims Port 8080. It prevents gRPC zombie threads from locking the port across Streamlit reloads.
     try:
-        execute_simulation()
-    except Exception as e:
-        # Ignore StopIteration from flwr grpc threading in mock env
-        pass
+        subprocess.run(["python", "-m", "src.main"], check=True)
+    except subprocess.CalledProcessError as e:
+        st.error(f"Simulation failed with error: {e}")
         
     # Write an empty flag to disk so Streamlit knows the background process successfully finished Phase 5 Federated iteration
     with open("global_model.pth", "w") as f:
