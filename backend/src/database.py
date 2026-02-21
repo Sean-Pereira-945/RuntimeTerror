@@ -24,20 +24,61 @@ _conn: psycopg.Connection | None = None
 
 
 def _get_conn() -> psycopg.Connection:
-    """Return a persistent connection, reconnecting only if closed/broken."""
+    """Return a persistent connection, reconnecting if closed or stale.
+
+    Neon serverless drops idle connections after ~5 min. A lightweight
+    ``SELECT 1`` ping detects this before handing the connection back.
+    """
     global _conn
-    if _conn is None or _conn.closed:
-        _conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+    if _conn is not None and not _conn.closed:
+        try:
+            _conn.execute("SELECT 1")
+            _conn.rollback()          # don't leave the ping inside a txn
+            return _conn
+        except Exception:
+            # Connection is dead — close and recreate below
+            try:
+                _conn.close()
+            except Exception:
+                pass
+            _conn = None
+    _conn = psycopg.connect(
+        DATABASE_URL,
+        row_factory=dict_row,
+        autocommit=False,
+        connect_timeout=10,
+    )
     return _conn
+
+
+def _force_reconnect() -> psycopg.Connection:
+    """Drop the current connection and open a fresh one."""
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+    _conn = None
+    return _get_conn()
 
 
 @contextmanager
 def get_db():
-    """Context manager that yields the persistent connection and commits on success."""
+    """Context manager that yields a connection and commits on success.
+
+    If an ``OperationalError`` fires (stale socket), the connection is
+    replaced and the error is re-raised so the caller can surface it.
+    This prevents *subsequent* requests from hitting the same dead socket.
+    """
     conn = _get_conn()
     try:
         yield conn
         conn.commit()
+    except psycopg.OperationalError:
+        # Force a fresh connection for the *next* request
+        _force_reconnect()
+        raise
     except Exception:
         try:
             conn.rollback()
