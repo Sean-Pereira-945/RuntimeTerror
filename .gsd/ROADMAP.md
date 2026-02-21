@@ -30,5 +30,5 @@
 **Objective**: Build the interactive Streamlit interface. Integrate the federated training loop to display live accuracy plots. Implement the live prediction inference for the Judge Demo ("hate this phone").
 
 ### Phase 5: Large-Scale Pretraining & Transformer Upgrade
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Upgrade the text pipeline to download and pretrain on a 20,000+ sample text sentiment dataset. Upgrade the model to a HuggingFace Transformer (with LSTM fallback). Ensure the Streamlit UI inference logic correctly routes client data to the server model and returns the prediction result back to the user/client.
