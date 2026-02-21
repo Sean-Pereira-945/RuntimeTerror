@@ -2,5 +2,6 @@ torch
 torchvision
 numpy
 tqdm
-flwr==1.0.0
+flwr[simulation]==1.0.0
 matplotlib
+streamlit
