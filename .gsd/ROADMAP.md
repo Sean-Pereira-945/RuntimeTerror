@@ -54,7 +54,7 @@
 **Objective**: Remove all remaining static mocks from the inference engine and frontend dashboards. Ensure the global model weights are genuinely saved to `global_model.pth` after Federated Learning simulation completes. Bind the `ClientDashboard.tsx` to dynamically query endpoint metrics specific to the logged-in store. Strip static 'Clients' and 'Models' navigation items from the Admin Sidebar.
 
 ### Phase 11: Advanced Edge Compute, Resilience & Analytics Pivot
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 **Objective**: 
 1. **Low Compute**: Integrate Local Updating (FedProx), Quantization/Sparsification, and Client Selection to optimize for resource-constrained clients. Provide Secure Data Proxy / Split Learning for "No Device" scenarios.
 2. **Resilience & Security**: Add DDoS resistance, fault tolerance (ignore dropping stragglers), and filter malicious data to protect global updates. Support structural heterogeneity ("different amount of column solvings").
