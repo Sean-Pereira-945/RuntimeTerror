@@ -13,6 +13,11 @@ Build a privacy-preserving federated learning system that acts as an Amazon/Goog
 5. Build a Streamlit web app showing a live accuracy plot and live predictions.
 6. Provide a user interface where inference strictly occurs to help the client understand the results (model is server-side, but prediction interpretations are returned to the client).
 7. Working prototype with reproducible results.
+8. **Low Compute**: Local Updating (FedProx), Model Compression (Quantization, sparsification), and Client Selection to drop/lighten stragglers.
+9. **No Device / Limited Hardware**: Fallbacks via Secure Data Proxy or Split Learning for cases where compute cannot happen directly on-device.
+10. **Resilience & Security**: Fault tolerance (ignore client dropouts), resistance against DDoS, and explicit defense against malicious data injections.
+11. **Heterogeneity**: Handle "different amount of column solvings" (handling diverse client-side feature columns / structures).
+12. **Frontend Analytics**: Display an Accuracy Heatmap, track "improvement on self model" specifically, and strictly enforce that 100% of data is sourced from APIs with NO static values in Javascript.
 
 ## Non-Goals (Out of Scope)
 - Deployment in a real-world production environment (focusing on prototype/simulation)
