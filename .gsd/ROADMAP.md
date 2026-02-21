@@ -60,3 +60,9 @@
 2. **Resilience & Security**: Add DDoS resistance, fault tolerance (ignore dropping stragglers), and filter malicious data to protect global updates. Support structural heterogeneity ("different amount of column solvings").
 3. **Analytics**: Implement an Accuracy Heatmap. Track and display "improvement on self model". Ensure absolute purity in frontend API bindings (zero static JS mocks).
 
+### Phase 12: Security Verification & Authentication Live Test
+**Status**: ⏳ Pending
+**Objective**:
+1. **Authentication Fix**: Verify database credentials logic runs properly and the frontend login page authentically connects to the Postgres database for client and admin roles without crashing.
+2. **DDoS Validation**: Programmatically trigger the rate limiter middleware to verify DDoS blocking kicks in effectively.
+3. **Malicious Supply Detection**: Test and trace the malicious data and client update filtering mechanisms at the aggregator/strategy level to ensure poisoned weights are successfully rejected.
