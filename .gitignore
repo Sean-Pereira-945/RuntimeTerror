@@ -1,16 +1,36 @@
+# ── Python ────────────────────────────────────────
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
 .env
+.venv/
 venv/
-data/
-results/
-temp_repo/
+env/
+
+# ── Node / Frontend ──────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ── Model weights & data ─────────────────────────
 *.pth
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+
+# ── IDE & OS ─────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Project tooling ──────────────────────────────
 .gsd/
 get-shit-done-for-antigravity/
-.*
-!.gitignore
-!backend/
-!frontend/
-!README.md
-!requirements.txt
+temp_repo/
+results/
