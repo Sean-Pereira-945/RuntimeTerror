@@ -42,5 +42,5 @@
 **Objective**: Integrate the newly provided Vite/React frontend dashboard into the project. Replace the hardcoded `mockData` animations in the React app with live `fetch()` API calls. Develop a lightweight Python backend wrapper (e.g. FastAPI or Flask) to start the Asynchronous FL simulation, fetch training progress, and serve prediction endpoints to the frontend UI.
 
 ### Phase 8: Project Restructuring & Architecture Cleanup
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Clean up the monorepo file structure separating React logic to `frontend/` and Python logic entirely to `backend/`. Remove identically duplicated source files, migrate Streamlit UI `app.py` to `backend/`, and correct all relative Python imports to stabilize execution modules across the stack.
