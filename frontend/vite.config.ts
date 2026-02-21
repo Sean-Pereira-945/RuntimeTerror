@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'DevHacks 2026 - Federated Learning Platform',
+        name: 'FedLearn - Federated Learning Platform',
         short_name: 'FedLearn',
         description: 'Collaborative AI Training Without Sharing Data',
         theme_color: '#1e3a8a',

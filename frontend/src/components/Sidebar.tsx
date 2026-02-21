@@ -26,7 +26,6 @@ export default function Sidebar() {
             </div>
             <div className="hidden sm:block">
               <div className="font-bold text-sm dark:text-white text-slate-900 leading-tight">FedLearn</div>
-              <div className="text-[10px] text-slate-400 leading-tight">DevHacks 2026</div>
             </div>
           </div>
 

@@ -73,7 +73,6 @@ export default function Login() {
             </div>
             <div>
               <div className="font-bold dark:text-white text-slate-900">FedLearn</div>
-              <div className="text-[10px] text-slate-400">DevHacks 2026</div>
             </div>
           </div>
 

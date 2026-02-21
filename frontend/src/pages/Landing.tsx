@@ -13,17 +13,9 @@ import {
 } from 'react-icons/fi';
 import ParticleBackground from '../components/ParticleBackground';
 import Globe3D from '../components/Globe3D';
-import AnimatedCounter from '../components/AnimatedCounter';
 import DarkModeToggle from '../components/DarkModeToggle';
 
 /* ────── Data ────── */
-const stats = [
-  { label: 'Global Accuracy', value: 94.2, suffix: '%', decimals: 1 },
-  { label: 'Active Clients', value: 5, suffix: '', decimals: 0 },
-  { label: 'Training Rounds', value: 50, suffix: '+', decimals: 0 },
-  { label: 'Data Points', value: 68820, suffix: '', decimals: 0 },
-];
-
 const steps = [
   { num: '01', title: 'Upload Data Locally', desc: 'Clients upload their private datasets. Data never leaves their device.', icon: FiServer },
   { num: '02', title: 'Train on Your Device', desc: 'Each client trains the model locally. Only model updates are shared.', icon: FiZap },
@@ -68,10 +60,10 @@ export default function Landing() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <Link to="/" className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-highlight-500 text-sm font-bold text-white">
-              FS
+              FL
             </div>
             <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-              FedSentiment
+              FedLearn
             </span>
           </Link>
           <div className="flex items-center gap-3">
@@ -138,7 +130,7 @@ export default function Landing() {
               transition={{ duration: 0.8, delay: 0.5 }}
               className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400"
             >
-              FedSentiment enables multiple organizations to collaboratively train a
+              FedLearn enables multiple organizations to collaboratively train a
               powerful sentiment analysis model while keeping all private data
               securely on their own devices. Zero data sharing. Maximum accuracy.
             </motion.p>
@@ -219,35 +211,7 @@ export default function Landing() {
         </div>
       </Section>
 
-      {/* ── Stats ── */}
-      <Section className="relative z-10 py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-            {stats.map((s, i) => (
-              <motion.div
-                key={s.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="glass-card p-6 text-center"
-              >
-                <div className="font-display text-3xl font-extrabold text-accent-500 sm:text-4xl">
-                  <AnimatedCounter
-                    value={s.value}
-                    decimals={s.decimals}
-                    suffix={s.suffix}
-                    duration={2500}
-                  />
-                </div>
-                <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  {s.label}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </Section>
+
 
       {/* ── Features ── */}
       <Section className="relative z-10 py-24 sm:py-32">
@@ -314,7 +278,7 @@ export default function Landing() {
       <footer className="relative z-10 border-t border-slate-200/50 py-8 dark:border-slate-800/50">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
           <p className="text-sm text-slate-400">
-            &copy; 2026 FedSentiment. Privacy-first federated learning.
+            &copy; 2026 FedLearn. Privacy-first federated learning.
           </p>
           <div className="flex items-center gap-4">
             <a
