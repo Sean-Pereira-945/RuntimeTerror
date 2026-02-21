@@ -48,3 +48,7 @@
 ### Phase 9: Live FL Metrics & Client Data Integration
 **Status**: ✅ Complete
 **Objective**: Change the dashboard graphs to reflect actual model training results rather than mock data. Enable clients to upload real data (CSV), which is then used by their local client node during the FL simulation. The server orchestrates FedAvg to update the pretrained global model using these actual client weights, while bridging real-time telemetry (accuracy, loss) back to the React dashboards.
+
+### Phase 10: Full Dynamic Data Integration & Frontend Cleanup
+**Status**: ⬜ Not Started
+**Objective**: Remove all remaining static mocks from the inference engine and frontend dashboards. Ensure the global model weights are genuinely saved to `global_model.pth` after Federated Learning simulation completes. Bind the `ClientDashboard.tsx` to dynamically query endpoint metrics specific to the logged-in store. Strip static 'Clients' and 'Models' navigation items from the Admin Sidebar.
