@@ -15,7 +15,9 @@ import { fetchMetrics } from '../../api';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-export default function AccuracyCurve() {
+interface Props { refreshTrigger?: number; }
+
+export default function AccuracyCurve({ refreshTrigger = 0 }: Props) {
   const chartRef = useRef<ChartJS<'line'>>(null);
   const [visibleRounds, setVisibleRounds] = useState(40);
   const [dataPayload, setDataPayload] = useState({ accuracyOverRounds: [] as number[], lossOverRounds: [] as number[], roundLabels: [] as string[] });
@@ -23,8 +25,9 @@ export default function AccuracyCurve() {
   useEffect(() => {
     fetchMetrics().then(res => {
       setDataPayload({ accuracyOverRounds: res.accuracyOverRounds || [], lossOverRounds: res.lossOverRounds || [], roundLabels: res.roundLabels || [] });
+      setVisibleRounds(40);
     });
-  }, []);
+  }, [refreshTrigger]);
 
   const { accuracyOverRounds, lossOverRounds, roundLabels } = dataPayload;
 

@@ -6,7 +6,9 @@ import type { Client } from '../../data/mockData';
  * AccuracyHeatmap — pure-CSS grid heatmap showing per-client accuracy
  * across training rounds. No extra npm dependency required.
  */
-export default function AccuracyHeatmap() {
+interface Props { refreshTrigger?: number; }
+
+export default function AccuracyHeatmap({ refreshTrigger = 0 }: Props) {
   const [curves, setCurves] = useState<Record<string, number[]>>({});
   const [clientNames, setClientNames] = useState<string[]>([]);
 
@@ -16,7 +18,7 @@ export default function AccuracyHeatmap() {
       setCurves(c);
       setClientNames(Object.keys(c));
     });
-  }, []);
+  }, [refreshTrigger]);
 
   const allValues = Object.values(curves).flat();
   const minVal = allValues.length ? Math.min(...allValues) : 50;

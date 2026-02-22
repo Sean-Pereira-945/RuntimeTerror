@@ -178,11 +178,94 @@ export default function ClientDashboard() {
 
   const [trainMsg, setTrainMsg] = useState<string>('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clean up polling on unmount
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (bgPollRef.current) clearInterval(bgPollRef.current);
+    };
   }, []);
+
+  // Check if training is already running on mount; start active polling if so
+  useEffect(() => {
+    fetchTrainingStatus().then(st => {
+      if (st.status === 'running' || st.status === 'starting') {
+        setStatus('training');
+        setTrainMsg(st.message ?? 'Training in progress...');
+        if (st.totalRounds) {
+          setProgress(Math.round((st.currentRound ?? 0) / st.totalRounds * 100));
+        }
+        startActivePolling();
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Background polling: every 10s check if training was started from Admin side
+  useEffect(() => {
+    bgPollRef.current = setInterval(async () => {
+      // Skip if we're already actively polling
+      if (pollRef.current) return;
+      try {
+        const st = await fetchTrainingStatus();
+        if (st.status === 'running' || st.status === 'starting') {
+          setStatus('training');
+          setTrainMsg(st.message ?? 'Training in progress...');
+          if (st.totalRounds) {
+            setProgress(Math.round((st.currentRound ?? 0) / st.totalRounds * 100));
+          }
+          startActivePolling();
+        } else if (st.status === 'completed') {
+          // Training completed since last check — refresh everything
+          refreshAllData();
+        }
+      } catch { /* ignore */ }
+    }, 10_000);
+    return () => { if (bgPollRef.current) clearInterval(bgPollRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refreshAllData = async () => {
+    setHistoryRefresh(prev => prev + 1);
+    try {
+      const data = await fetchClientPersonal();
+      setPersonalData(data);
+      if (data.curve.length > 0) {
+        setDynamicCurve(data.curve);
+        setDynamicAccuracy(data.localAccuracy);
+        setDynamicRounds(data.roundsTrained);
+        setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const startActivePolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const st: TrainingStat = await fetchTrainingStatus();
+        if (st.status === 'running' && st.totalRounds) {
+          const pct = Math.round((st.currentRound ?? 0) / st.totalRounds * 100);
+          setProgress(pct);
+          setTrainMsg(st.message ?? `Round ${st.currentRound}/${st.totalRounds}`);
+        } else if (st.status === 'completed') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setProgress(100);
+          setTrainMsg('Training complete — model aggregated!');
+          setStatus('complete');
+          fireConfetti();
+          refreshAllData();
+          setTimeout(() => setStatus('idle'), 4000);
+        } else if (st.status === 'failed') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setTrainMsg(st.message ?? 'Training failed');
+          setStatus('idle');
+        }
+      } catch { /* silently retry next poll */ }
+    }, 2000);
+  };
 
   const startTraining = async () => {
     setStatus('training');
@@ -196,41 +279,7 @@ export default function ClientDashboard() {
       setStatus('idle');
       return;
     }
-
-    // Poll backend for real training progress
-    pollRef.current = setInterval(async () => {
-      try {
-        const st: TrainingStat = await fetchTrainingStatus();
-        if (st.status === 'running' && st.totalRounds) {
-          const pct = Math.round((st.currentRound ?? 0) / st.totalRounds * 100);
-          setProgress(pct);
-          setTrainMsg(st.message ?? `Round ${st.currentRound}/${st.totalRounds}`);
-        } else if (st.status === 'completed') {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setProgress(100);
-          setTrainMsg('Training complete — model aggregated!');
-          setStatus('complete');
-          fireConfetti();
-          // Refresh personal data and training history
-          setHistoryRefresh(prev => prev + 1);
-          try {
-            const data = await fetchClientPersonal();
-            setPersonalData(data);
-            if (data.curve.length > 0) {
-              setDynamicCurve(data.curve);
-              setDynamicAccuracy(data.localAccuracy);
-              setDynamicRounds(data.roundsTrained);
-              setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
-            }
-          } catch { /* ignore refresh error */ }
-          setTimeout(() => setStatus('idle'), 4000);
-        } else if (st.status === 'failed') {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setTrainMsg(st.message ?? 'Training failed');
-          setStatus('idle');
-        }
-      } catch { /* silently retry next poll */ }
-    }, 2000);
+    startActivePolling();
   };
 
   const personalChartData = {
@@ -608,7 +657,7 @@ export default function ClientDashboard() {
 
         {/* Accuracy Heatmap - The only allowed advanced visualization */}
         <div className={`transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <AccuracyHeatmap />
+          <AccuracyHeatmap refreshTrigger={historyRefresh} />
         </div>
 
         {/* Training History Table */}

@@ -38,6 +38,8 @@ export default function AdminDashboard() {
   const [trainMsg, setTrainMsg] = useState('');
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSeenStatus = useRef<string>('idle');
 
   const refreshDashData = useCallback(() => {
     fetchMetrics().then(data => setAdminMetrics(data.adminMetrics || []));
@@ -49,6 +51,7 @@ export default function AdminDashboard() {
     // Check training status on mount — if already running, start polling
     fetchTrainingStatus().then(st => {
       setTrainStatus(st);
+      lastSeenStatus.current = st.status;
       if (st.status === 'running' || st.status === 'starting') {
         startPolling();
       }
@@ -57,7 +60,34 @@ export default function AdminDashboard() {
     return () => {
       clearTimeout(timer);
       if (pollRef.current) clearInterval(pollRef.current);
+      if (bgPollRef.current) clearInterval(bgPollRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Background polling: every 10s detect training started from Client side
+  useEffect(() => {
+    bgPollRef.current = setInterval(async () => {
+      // Skip if already actively polling
+      if (pollRef.current) return;
+      try {
+        const st = await fetchTrainingStatus();
+        setTrainStatus(st);
+        if (st.status === 'running' || st.status === 'starting') {
+          setTrainMsg(st.message ?? 'Training in progress...');
+          if (st.totalRounds) {
+            setTrainProgress(Math.round((st.currentRound ?? 0) / st.totalRounds * 100));
+          }
+          startPolling();
+        } else if (st.status === 'completed' && lastSeenStatus.current !== 'completed') {
+          // Training completed since last check — refresh everything
+          refreshDashData();
+          setHistoryRefresh(prev => prev + 1);
+        }
+        lastSeenStatus.current = st.status;
+      } catch { /* ignore */ }
+    }, 10_000);
+    return () => { if (bgPollRef.current) clearInterval(bgPollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -72,15 +102,17 @@ export default function AdminDashboard() {
           setTrainProgress(pct);
           setTrainMsg(st.message ?? `Round ${st.currentRound}/${st.totalRounds}`);
         } else if (st.status === 'completed') {
-          if (pollRef.current) clearInterval(pollRef.current);
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           setTrainProgress(100);
           setTrainMsg('Training complete — model aggregated!');
+          lastSeenStatus.current = 'completed';
           // Auto-refresh dashboard data + history table
           refreshDashData();
           setHistoryRefresh(prev => prev + 1);
         } else if (st.status === 'failed') {
-          if (pollRef.current) clearInterval(pollRef.current);
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           setTrainMsg(st.message ?? 'Training failed');
+          lastSeenStatus.current = 'failed';
         }
       } catch { /* silently retry */ }
     }, 2000);
@@ -272,20 +304,20 @@ export default function AdminDashboard() {
             {/* Charts Row */}
             <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8 transition-all duration-900 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
               <div className="animate-fade-in" style={{ animationDelay: '400ms' }}>
-                <AccuracyCurve />
+                <AccuracyCurve refreshTrigger={historyRefresh} />
               </div>
               <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
-                <ClientComparison />
+                <ClientComparison refreshTrigger={historyRefresh} />
               </div>
             </div>
 
             {/* Heatmap + Radar */}
             <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8 transition-all duration-900 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
               <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-                <AccuracyHeatmap />
+                <AccuracyHeatmap refreshTrigger={historyRefresh} />
               </div>
               <div className="animate-fade-in" style={{ animationDelay: '700ms' }}>
-                <ContributionRadar />
+                <ContributionRadar refreshTrigger={historyRefresh} />
               </div>
             </div>
 

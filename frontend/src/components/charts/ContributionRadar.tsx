@@ -18,12 +18,14 @@ ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, 
  * ContributionRadar — radar chart comparing client contributions
  * across multiple dimensions (accuracy, data-points, rounds, contribution %).
  */
-export default function ContributionRadar() {
+interface Props { refreshTrigger?: number; }
+
+export default function ContributionRadar({ refreshTrigger = 0 }: Props) {
   const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
     fetchClients().then(res => setClients(res.clients || []));
-  }, []);
+  }, [refreshTrigger]);
 
   // Normalize each dimension to 0–100 for the radar
   const maxDP = Math.max(...clients.map(c => c.dataPoints), 1);

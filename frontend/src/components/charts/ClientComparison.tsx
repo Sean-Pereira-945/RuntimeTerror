@@ -14,12 +14,14 @@ import type { Client } from '../../data/mockData';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-export default function ClientComparison() {
+interface Props { refreshTrigger?: number; }
+
+export default function ClientComparison({ refreshTrigger = 0 }: Props) {
   const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
     fetchClients().then(res => setClients(res.clients || []));
-  }, []);
+  }, [refreshTrigger]);
 
   const data = {
     labels: clients.map((c) => c.shortName),
