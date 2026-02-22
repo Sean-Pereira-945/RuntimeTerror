@@ -31,9 +31,12 @@ export default function Sidebar() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium shadow-sm shadow-violet-500/10">
+            <button
+              onClick={() => navigate(user?.role === 'admin' ? '/admin' : '/client')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium shadow-sm shadow-violet-500/10"
+            >
               <FiBarChart2 className="w-4 h-4" />
-              Dashboard
+              {user?.role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
             </button>
           </nav>
         </div>
@@ -73,9 +76,15 @@ export default function Sidebar() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="md:hidden border-t border-white/5 px-4 py-3 space-y-3 dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl">
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium">
+          <button
+            onClick={() => {
+              navigate(user?.role === 'admin' ? '/admin' : '/client');
+              setMobileOpen(false);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium"
+          >
             <FiBarChart2 className="w-4 h-4" />
-            Dashboard
+            {user?.role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
           </button>
           <div className="flex items-center justify-between pt-2 border-t border-white/5">
             <div className="flex items-center gap-2">

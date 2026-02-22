@@ -418,20 +418,19 @@ def seed_initial_data():
         cur = conn.cursor()
 
         # Seed default users
-        cur.execute("SELECT COUNT(*) AS cnt FROM users")
-        if cur.fetchone()["cnt"] == 0:
-            from src.auth import hash_password
-            admin_pw = hash_password("admin123")
-            client_pw = hash_password("client123")
-            cur.execute(
-                """INSERT INTO users (email, name, password, role, org, avatar)
-                   VALUES (%s, %s, %s, %s, %s, %s),
-                          (%s, %s, %s, %s, %s, %s)""",
-                (
-                    "admin@example.com", "Admin User", admin_pw, "admin", "Admin Org", "AD",
-                    "client@example.com", "Client User", client_pw, "client", "Client Org", "CL"
-                )
+        from src.auth import hash_password
+        admin_pw = hash_password("admin123")
+        client_pw = hash_password("client123")
+        cur.execute(
+            """INSERT INTO users (email, name, password, role, org, avatar)
+               VALUES (%s, %s, %s, %s, %s, %s),
+                      (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (email) DO NOTHING""",
+            (
+                "admin@example.com", "Admin User", admin_pw, "admin", "Admin Org", "AD",
+                "client@example.com", "Client User", client_pw, "client", "Client Org", "CL"
             )
+        )
 
         # Seed attack events
         cur.execute("SELECT COUNT(*) AS cnt FROM attack_events")

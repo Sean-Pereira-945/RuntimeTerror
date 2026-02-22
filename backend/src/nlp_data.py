@@ -78,31 +78,51 @@ def generate_synthetic_reviews(store_name, num_samples=1000):
     return list(texts), list(labels)
 
 def get_store_dataset(store_name, num_samples=1000):
-    upload_csv = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads", f"{store_name}.csv")
+    from src.database import get_client_dataset
+    print(f"[DataLoader] Initializing for client: '{store_name}'")
     
-    if os.path.exists(upload_csv):
-        print(f"Loading REAL data for {store_name} from {upload_csv}")
+    # Try reaching the database first
+    print(f"[Client {store_name}] DYNAMIC DISCOVERY: Fetching data from DATABASE...")
+    try:
+        db_rows = get_client_dataset(store_name, limit=num_samples)
+        if db_rows:
+            print(f"[Client {store_name}] SUCCESS: Loaded {len(db_rows)} rows from DB.")
+            texts = [r["text"] for r in db_rows]
+            labels = [r["label"] for r in db_rows]
+            return ReviewDataset(texts, labels)
+    except Exception as e:
+        print(f"[Client {store_name}] DATABASE ERROR: {e}")
+
+    # Fallback to filesystem uploads
+    print(f"[Client {store_name}] DYNAMIC DISCOVERY: No database records found. Checking filesystem...")
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    upload_dir = os.path.join(backend_dir, "data", "uploads")
+    csv_path = os.path.join(upload_dir, f"{store_name}.csv")
+    
+    if os.path.isfile(csv_path):
         try:
-            df = pd.read_csv(upload_csv)
-            # Ensure safe fallback if columns are misnamed
-            text_col = "text" if "text" in df.columns else df.columns[0]
-            label_col = "label" if "label" in df.columns else df.columns[1]
-            
-            texts = df[text_col].astype(str).tolist()
-            labels = df[label_col].astype(int).tolist()
-            
-            # Slice to avoid overwhelming local memory during demo
-            if len(texts) > num_samples:
-                texts = texts[:num_samples]
-                labels = labels[:num_samples]
-                
+            print(f"[Client {store_name}] Found uploaded CSV: {csv_path}")
+            for enc in ("utf-8", "utf-16", "latin-1"):
+                try:
+                    df = pd.read_csv(csv_path, encoding=enc)
+                    print(f"[Client {store_name}] SUCCESS: Loaded {len(df)} rows from CSV file.")
+                    # Limit to requested num_samples
+                    if len(df) > num_samples:
+                        df = df.sample(n=num_samples, random_state=42)
+                    texts = df["text"].tolist() if "text" in df.columns else df.iloc[:, 0].tolist()
+                    labels = df["label"].tolist() if "label" in df.columns else df.iloc[:, 1].tolist()
+                    return ReviewDataset(texts, labels)
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+            print(f"[Client {store_name}] Could not decode CSV file. Falling back to synthetic.")
         except Exception as e:
-            print(f"Failed to parse CSV for {store_name}: {e}. Falling back to synthetic.")
-            texts, labels = generate_synthetic_reviews(store_name, num_samples)
+            print(f"[Client {store_name}] CSV LOAD ERROR: {e}. Falling back to synthetic.")
     else:
-        print(f"Loading synthetic data for {store_name}")
-        texts, labels = generate_synthetic_reviews(store_name, num_samples)
-        
+        print(f"[Client {store_name}] No CSV found at {csv_path}")
+
+    # Final fallback to synthetic data
+    print(f"[Client {store_name}] Using synthetic data as final fallback.")
+    texts, labels = generate_synthetic_reviews(store_name, num_samples)
     return ReviewDataset(texts, labels)
 
 if __name__ == "__main__":

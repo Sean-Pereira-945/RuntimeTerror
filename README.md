@@ -78,6 +78,7 @@ The platform uses a state-of-the-art Transformer architecture for robust sentime
 
 ### 🧩 Dynamic Infrastructure
 - **Dynamic Schema Resolver**: Intelligent column mapping allows clients with different CSV structures (e.g., `ReviewText` vs `comment_body`) to participate in the same training pool.
+- **Client-Side CSV Upload**: Clients can upload custom datasets directly through the dashboard, mapping their columns interactively, and selecting which dataset to use for local training.
 - **Real-time Heartbeat Monitoring**: Tracks client liveliness and fault tolerance status.
 
 ---
@@ -85,7 +86,7 @@ The platform uses a state-of-the-art Transformer architecture for robust sentime
 ## 💻 Tech Stack
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Chart.js, Framer Motion.
-- **Backend**: Python 3.10+, FastAPI, PyTorch, HuggingFace Transformers, Flower (flwr==1.0.0).
+- **Backend**: Python 3.10+, FastAPI, PyTorch, HuggingFace Transformers, flwr (Flower).
 - **Database**: PostgreSQL (Neon Serverless) with integrated auto-migrations.
 
 ---
@@ -105,7 +106,7 @@ pip install -r requirements.txt
 # Start the FastAPI server
 python -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
-*Note: The server will automatically run migrations and synchronize metrics from `fl_metrics.json` on startup.*
+*Note: The server will automatically run migrations, synchronize metrics from `fl_metrics.json`, and seed default users on startup.*
 
 ### 2. Frontend Setup
 ```bash
@@ -113,7 +114,12 @@ cd frontend
 npm install
 npm run dev
 ```
-Navigate to `http://localhost:5173`. Authentication is required (JWT-based).
+Navigate to `http://localhost:5173`.
+
+### 3. Default Credentials
+The following default accounts are seeded automatically on the first run:
+- **Admin**: `admin@example.com` / `admin123`
+- **Client**: `client@example.com` / `client123`
 
 ---
 

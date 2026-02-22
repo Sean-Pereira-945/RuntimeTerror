@@ -59,11 +59,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── JWT helpers ───────────────────────────────────────────────────────
 
-def create_token(user_id: int, email: str, role: str) -> str:
+def create_token(user_id: int, email: str, role: str, org: str = "") -> str:
     payload = {
         "sub": str(user_id),
         "email": email,
         "role": role,
+        "org": org,
         "exp": time.time() + JWT_EXPIRATION_HOURS * 3600,
         "iat": time.time(),
     }
@@ -97,7 +98,7 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
-        "org": user.get("org", ""),
+        "org": payload.get("org") or user.get("org", ""),  # Prefer JWT org, fallback to DB
         "avatar": user.get("avatar", ""),
     }
 
@@ -145,7 +146,7 @@ def register_user(req: RegisterRequest) -> AuthResponse:
     if user is None:
         raise HTTPException(status_code=500, detail="Failed to create user")
 
-    token = create_token(user["id"], user["email"], user["role"])
+    token = create_token(user["id"], user["email"], user["role"], user.get("org", ""))
     return AuthResponse(
         token=token,
         user={
@@ -173,7 +174,7 @@ def login_user(req: LoginRequest) -> AuthResponse:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     avatar = user.get("avatar") or "".join(w[0].upper() for w in user["name"].split()[:2])
-    token = create_token(user["id"], user["email"], user["role"])
+    token = create_token(user["id"], user["email"], user["role"], user.get("org", ""))
     return AuthResponse(
         token=token,
         user={

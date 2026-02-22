@@ -68,7 +68,7 @@ def _seed_from_round(server_round: int) -> random.Random:
 #  Byzantine Defence (Krum / Cosine-similarity screening)
 # ══════════════════════════════════════════════════════════════════════
 
-def krum_scores(server_round: int | None = None) -> Dict:
+def krum_scores(server_round: Optional[int] = None) -> Dict:
     """Return per-client Krum scores for the latest (or given) round."""
     metrics = _load_metrics()
     if not metrics:
@@ -104,7 +104,7 @@ def _generate_krum_scores(rng: random.Random, current_round: int, num_rounds: in
     }
 
 
-def cosine_similarity_matrix(server_round: int | None = None) -> Dict:
+def cosine_similarity_matrix(server_round: Optional[int] = None) -> Dict:
     """NxN cosine similarity between client gradient updates."""
     metrics = _load_metrics()
     target = server_round or max(len(metrics), 1)

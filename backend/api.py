@@ -1,12 +1,13 @@
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import sys
 import subprocess
 import os
 import json
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
 
 from src.inference_api import predict_sentiment
 from src.security import (
@@ -29,13 +30,18 @@ from src.auth import (
 from src.database import (
     run_migrations,
     sync_json_metrics_to_db,
-    seed_initial_data,
-    get_all_fl_metrics,
     save_fl_round,
+    get_all_fl_metrics,
+    sync_json_metrics_to_db,
     get_config,
     set_config,
+    get_email_logs,
+    add_email_log,
     get_attack_events,
     save_attack_event,
+    seed_initial_data,
+    save_client_dataset,
+    get_client_dataset_stats,
     get_client_uptimes_db,
 )
 from src.features import (
@@ -44,8 +50,24 @@ from src.features import (
 )
 
 app = FastAPI(title="FL Server API")
+ 
+# ── CORS Middleware (Must be before other middlewares) ──────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://localhost:5174", 
+        "http://localhost:5175", 
+        "http://127.0.0.1:5173", 
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Allow React dev server
 # ── Rate Limiting Middleware ──────────────────────────────────────────
 
 # Simple in-memory rate limiter: { IP/ClientID : [timestamps] }
@@ -93,13 +115,7 @@ def heartbeat(user: dict = Depends(get_current_user)):
     _save_heartbeats()
     return {"status": "ok", "timestamp": HEARTBEATS[org]}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORSMiddleware moved above
 
 class PredictRequest(BaseModel):
     text: str
@@ -276,12 +292,9 @@ def get_client_personal(user: dict = Depends(get_current_user)):
     rounds_count = len(history)
     latest = history[-1] if history else None
 
-    # Assign this user to the first FL client (no persistent user↔FL-client mapping exists)
-    client_ids = _discover_clients(history)
-    assigned_idx = 0  # default to first client
-
-    # Build accuracy curve for the assigned client
-    assigned_cid = client_ids[assigned_idx] if client_ids else None
+    # Use the logged-in user's ORG as the primary client ID for metrics
+    client_id = user.get("org", "default")
+    assigned_cid = client_id
     client_curve: list[float] = []
     for h in history:
         for cm in h.get("client_metrics", []):
@@ -293,33 +306,44 @@ def get_client_personal(user: dict = Depends(get_current_user)):
     model_version = f"v{rounds_count}.{len(client_curve)}" if rounds_count else "v0.0"
     last_round_time = latest["duration"] if latest else "0s"
 
-    # Compute dataset size from actual upload file
-    upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "uploads")
-    dataset_size = 0
+    # Compute dataset size from database stats (current client only)
+    db_stats = get_client_dataset_stats()
+    dataset_size = db_stats.get(client_id, 0)
+    
     recent_uploads: list[dict] = []
-    if os.path.isdir(upload_dir):
-        import pandas as pd
-        for fname in sorted(os.listdir(upload_dir), reverse=True):
-            fpath = os.path.join(upload_dir, fname)
-            if os.path.isfile(fpath):
-                stat = os.stat(fpath)
-                size_str = f"{stat.st_size / 1024:.0f} KB" if stat.st_size < 1_048_576 else f"{stat.st_size / 1_048_576:.1f} MB"
-                rows = 0
-                if fname.endswith(".csv"):
-                    for enc in ("utf-8", "utf-16", "latin-1"):
+    upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "uploads")
+    print(f"[DEBUG] get_client_personal for client_id: '{client_id}'")
+    if client_id and client_id.strip():  # Ensure client_id is not empty
+        if os.path.isdir(upload_dir):
+            for fname in sorted(os.listdir(upload_dir), reverse=True):
+                if fname.startswith('.'):  # Skip hidden files like .gitkeep
+                    continue
+                fpath = os.path.join(upload_dir, fname)
+                # Strict filter: only show CSV files that match this client's ID exactly
+                is_exact_match = (fname == f"{client_id}.csv" or fname == f"{client_id}_dataset.csv")
+                if os.path.isfile(fpath) and fname.endswith(".csv") and is_exact_match:
+                    print(f"[DEBUG] Found matching upload: {fname}")
+                    try:
+                        stat = os.stat(fpath)
+                        size_str = f"{stat.st_size / 1024:.0f} KB" if stat.st_size < 1_048_576 else f"{stat.st_size / 1_048_576:.1f} MB"
                         try:
-                            df = pd.read_csv(fpath, encoding=enc)
-                            rows = len(df)
-                            break
+                            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                                rows = sum(1 for _ in f) - 1
                         except Exception:
-                            continue
-                dataset_size += rows
-                recent_uploads.append({
-                    "name": fname,
-                    "size": size_str,
-                    "date": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d"),
-                    "rows": rows,
-                })
+                            rows = 0
+                        
+                        recent_uploads.append({
+                            "name": fname,
+                            "size": size_str,
+                            "date": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d"),
+                            "rows": rows,
+                            "selected": True  # This is the file matching their client_id
+                        })
+                    except Exception as e:
+                        print(f"[DEBUG] Error processing file {fname}: {e}")
+        print(f"[DEBUG] Found {len(recent_uploads)} recent uploads for client_id: {client_id}")
+    else:
+        print(f"[DEBUG] Client ID is empty or invalid: '{client_id}'")
 
     return {
         "localAccuracy": local_accuracy,
@@ -339,51 +363,56 @@ def predict(req: PredictRequest, user: dict = Depends(get_current_user)):
 
 
 # ── Training status file ──────────────────────────────────────────────
-_TRAINING_STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "training_status.json")
+def _get_training_status_file(client_id: str) -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", f"training_status_{client_id}.json")
 
-def _read_training_status() -> dict:
+def _read_training_status(client_id: str) -> dict:
     """Read the current training status from the shared JSON file."""
     try:
-        with open(_TRAINING_STATUS_FILE, "r") as f:
+        with open(_get_training_status_file(client_id), "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {"status": "idle"}
 
-def _write_training_status(data: dict):
-    os.makedirs(os.path.dirname(_TRAINING_STATUS_FILE), exist_ok=True)
-    with open(_TRAINING_STATUS_FILE, "w") as f:
+def _write_training_status(client_id: str, data: dict):
+    file_path = _get_training_status_file(client_id)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w") as f:
         json.dump(data, f)
 
 
-def run_fl_background():
+def run_fl_background(client_id: str):
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     try:
-        subprocess.run(["python", "-m", "src.main"], check=True, cwd=backend_dir)
+        # Use sys.executable to ensure we use the same Python environment
+        subprocess.run([sys.executable, "-m", "src.main", "--client-id", client_id], check=True, cwd=backend_dir)
         # Sync new metrics into the database after training completes
         sync_json_metrics_to_db()
     except subprocess.CalledProcessError as e:
         print(f"Simulation failed: {e}")
-        _write_training_status({"status": "failed", "message": str(e)})
+        _write_training_status(client_id, {"status": "failed", "message": str(e)})
     except Exception as e:
         print(f"Simulation error: {e}")
-        _write_training_status({"status": "failed", "message": str(e)})
+        _write_training_status(client_id, {"status": "failed", "message": str(e)})
 
 
 @app.post("/api/train")
 def train(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    client_id = user.get("org", "default")
     # Prevent starting if already running
-    current = _read_training_status()
+    current = _read_training_status(client_id)
     if current.get("status") == "running":
         raise HTTPException(status_code=409, detail="Training is already in progress")
-    _write_training_status({"status": "starting", "message": "Launching FL simulation..."})
-    background_tasks.add_task(run_fl_background)
+    _write_training_status(client_id, {"status": "starting", "message": "Launching FL simulation..."})
+    background_tasks.add_task(run_fl_background, client_id)
     return {"status": "Training started in background"}
 
 
 @app.get("/api/train/status")
 def train_status(user: dict = Depends(get_current_user)):
     """Return the current training progress from the shared status file."""
-    return _read_training_status()
+    client_id = user.get("org", "default")
+    return _read_training_status(client_id)
 
 
 @app.post("/api/upload-preview")
@@ -444,6 +473,7 @@ async def upload_file(
     if not os.path.isfile(tmp_path):
         raise HTTPException(status_code=404, detail="Staging file not found. Please re-upload.")
 
+    print(f"[Upload] Finalizing for client: {client_id}, staging_id: {staging_id}")
     try:
         for enc in ("utf-8", "utf-16", "latin-1"):
             try:
@@ -452,36 +482,57 @@ async def upload_file(
             except (UnicodeDecodeError, UnicodeError):
                 continue
         else:
-            os.unlink(tmp_path)
+            print(f"[Upload] ERR: Could not decode CSV {staging_id}")
+            if os.path.exists(tmp_path): os.unlink(tmp_path)
             raise HTTPException(status_code=400, detail="Could not decode CSV")
 
         if text_column not in df.columns:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path): os.unlink(tmp_path)
             raise HTTPException(status_code=400, detail=f"Column '{text_column}' not found")
         if label_column not in df.columns:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path): os.unlink(tmp_path)
             raise HTTPException(status_code=400, detail=f"Column '{label_column}' not found")
 
-        # Rename to standard columns the FL pipeline expects
-        df = df.rename(columns={text_column: "text", label_column: "label"})
+        print(f"[Upload] Mapping labels in {len(df)} rows...")
+        # Auto-map common sentiment strings if detected
+        if df[label_column].dtype == object:
+            mapping = {
+                "positive": 1, "negative": 0,
+                "pos": 1, "neg": 0,
+                "1": 1, "0": 0,
+                "True": 1, "False": 0,
+                "true": 1, "false": 0
+            }
+            df[label_column] = df[label_column].astype(str).str.lower().str.strip()
+            df[label_column] = df[label_column].map(mapping).fillna(df[label_column])
 
-        # Validate label values are binary
-        if not df["label"].isin([0, 1]).all():
-            os.unlink(tmp_path)
+        df[label_column] = pd.to_numeric(df[label_column], errors='coerce')
+
+        if not df[label_column].isin([0, 1]).all():
+            print(f"[Upload] ERR: Non-binary labels detected in {label_column}")
+            if os.path.exists(tmp_path): os.unlink(tmp_path)
             raise HTTPException(
                 status_code=400,
-                detail="Label column must contain only 0 (negative) or 1 (positive)",
+                detail="Label column must contain only 0 (negative) or 1 (positive).",
             )
 
+        df = df.rename(columns={text_column: "text", label_column: "label"})
         file_path = os.path.join(upload_dir, f"{client_id}.csv")
         df[["text", "label"]].to_csv(file_path, index=False)
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path): os.unlink(tmp_path)
+        
+        # ── Database Sync ───────────────────────────────────────────
+        save_client_dataset(client_id, df)
+        
+        print(f"[Upload] SUCCESS: Saved {len(df)} rows and synced to DB for {client_id}")
+        return {"filename": staging_id, "client_id": client_id, "rows": len(df), "status": "success"}
 
-    except pd.errors.ParserError:
-        os.unlink(tmp_path)
-        raise HTTPException(status_code=400, detail="File is not a valid CSV")
-
-    return {"filename": staging_id, "client_id": client_id, "rows": len(df), "status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Upload] CRITICAL ERR: {e}")
+        if os.path.exists(tmp_path): os.unlink(tmp_path)
+        raise HTTPException(status_code=500, detail=f"Internal processing error: {str(e)}")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -506,12 +557,12 @@ def get_health(user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/security/krum")
-def get_krum(round: int | None = None, user: dict = Depends(get_current_user)):
+def get_krum(round: Optional[int] = None, user: dict = Depends(get_current_user)):
     return krum_scores(round)
 
 
 @app.get("/api/security/cosine")
-def get_cosine(round: int | None = None, user: dict = Depends(get_current_user)):
+def get_cosine(round: Optional[int] = None, user: dict = Depends(get_current_user)):
     return cosine_similarity_matrix(round)
 
 
@@ -632,5 +683,5 @@ def api_bot_test(req: BotTestRequest, user: dict = Depends(get_current_user)):
 # ── Self-Improvement ──────────────────────────────────────────────────
 
 @app.get("/api/improvement")
-def api_get_improvement(client_id: str | None = None, user: dict = Depends(get_current_user)):
+def api_get_improvement(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     return get_self_improvement(client_id)
