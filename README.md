@@ -77,6 +77,8 @@ The platform uses a state-of-the-art Transformer architecture for robust sentime
     - **Client**: Highly restricted, focused view. Only Accuracy Heatmaps and simplified "Improving/Decreasing" trends are visible to respect organization privacy boundaries.
 
 ### 🧩 Dynamic Infrastructure
+- **Client-Triggered Async Local Training**: Clients can asynchronously instruct the orchestrator to fire an isolated FL round specifically against their local dataset directly from the UI.
+- **Unified Global Aggregation**: Ensures concurrent updates correctly converge on `global_model.pth` rather than overwriting base pretrained inputs.
 - **Dynamic Schema Resolver**: Intelligent column mapping allows clients with different CSV structures (e.g., `ReviewText` vs `comment_body`) to participate in the same training pool.
 - **Client-Side CSV Upload**: Clients can upload custom datasets directly through the dashboard, mapping their columns interactively, and selecting which dataset to use for local training.
 - **Real-time Heartbeat Monitoring**: Tracks client liveliness and fault tolerance status.
