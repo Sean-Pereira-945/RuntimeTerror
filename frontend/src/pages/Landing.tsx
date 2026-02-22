@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import anime from 'animejs';
 import {
   FiShield,
   FiZap,
@@ -31,18 +32,43 @@ const features = [
   { icon: FiServer, title: 'Scalable Architecture', desc: 'Add unlimited clients seamlessly. The system scales horizontally across continents.' },
 ];
 
-/* ────── Fade-in section wrapper ────── */
+/* ────── Anime.js scroll-triggered section wrapper ────── */
 function Section({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const animated = useRef(false);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    // Start hidden
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(50px)';
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !animated.current) {
+          animated.current = true;
+          anime({
+            targets: el,
+            opacity: [0, 1],
+            translateY: [50, 0],
+            duration: 800,
+            delay: delay * 1000,
+            easing: 'easeOutExpo',
+          });
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: '-40px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [delay]);
+
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.7, delay }}
-      className={className}
-    >
+    <section ref={sectionRef} className={className}>
       {children}
-    </motion.section>
+    </section>
   );
 }
 
@@ -53,10 +79,100 @@ export default function Landing() {
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 200]);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
 
+  /* ── anime.js hero entrance ── */
+  const heroTextRef = useRef<HTMLDivElement>(null);
+  const stepsGridRef = useRef<HTMLDivElement>(null);
+  const featuresGridRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    // Navbar slide-down
+    if (navRef.current) {
+      anime({
+        targets: navRef.current,
+        translateY: [-60, 0],
+        opacity: [0, 1],
+        duration: 900,
+        easing: 'easeOutExpo',
+      });
+    }
+
+    // Hero text stagger
+    if (heroTextRef.current) {
+      anime({
+        targets: heroTextRef.current.children,
+        opacity: [0, 1],
+        translateY: [40, 0],
+        delay: anime.stagger(150, { start: 300 }),
+        duration: 900,
+        easing: 'easeOutExpo',
+      });
+    }
+  }, []);
+
+  /* ── Anime.js for Steps cards (Intersection Observer) ── */
+  useEffect(() => {
+    const el = stepsGridRef.current;
+    if (!el) return;
+    // Set children hidden initially
+    Array.from(el.children).forEach((c) => {
+      (c as HTMLElement).style.opacity = '0';
+      (c as HTMLElement).style.transform = 'translateY(30px)';
+    });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          anime({
+            targets: el.children,
+            opacity: [0, 1],
+            translateY: [30, 0],
+            scale: [0.95, 1],
+            delay: anime.stagger(120),
+            duration: 700,
+            easing: 'easeOutBack',
+          });
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  /* ── Anime.js for Feature cards (Intersection Observer) ── */
+  useEffect(() => {
+    const el = featuresGridRef.current;
+    if (!el) return;
+    Array.from(el.children).forEach((c) => {
+      (c as HTMLElement).style.opacity = '0';
+      (c as HTMLElement).style.transform = 'translateY(25px)';
+    });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          anime({
+            targets: el.children,
+            opacity: [0, 1],
+            translateY: [25, 0],
+            scale: [0.96, 1],
+            delay: anime.stagger(80, { start: 50 }),
+            duration: 600,
+            easing: 'easeOutExpo',
+          });
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       {/* ── Navbar ── */}
-      <nav className="fixed top-0 z-50 w-full border-b border-white/5 bg-white/70 backdrop-blur-xl dark:bg-slate-950/70">
+      <nav ref={navRef} className="fixed top-0 z-50 w-full border-b border-white/5 bg-white/70 backdrop-blur-xl dark:bg-slate-950/70" style={{ opacity: 0 }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <Link to="/" className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-highlight-500 text-sm font-bold text-white">
@@ -94,74 +210,84 @@ export default function Landing() {
           className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-6 lg:grid-cols-2"
         >
           {/* Left — Text */}
-          <div className="max-w-xl">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            >
+          <div ref={heroTextRef} className="max-w-xl">
+            <div style={{ opacity: 0 }}>
               <span className="inline-flex items-center gap-2 rounded-full border border-accent-500/20 bg-accent-500/10 px-4 py-1.5 text-xs font-semibold text-accent-400">
                 <span className="h-2 w-2 rounded-full bg-accent-500 animate-pulse" />
                 Federated Learning Platform
               </span>
-            </motion.div>
+            </div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.35 }}
+            <h1 style={{ opacity: 0 }}
               className="mt-6 font-display text-4xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-5xl lg:text-6xl"
             >
               Train AI{' '}
               <span className="gradient-text">Collaboratively</span>
               <br />
               Without Sharing Data
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
+            <p style={{ opacity: 0 }}
               className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400"
             >
               FedLearn enables multiple organizations to collaboratively train a
               powerful sentiment analysis model while keeping all private data
               securely on their own devices. Zero data sharing. Maximum accuracy.
-            </motion.p>
+            </p>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.65 }}
+            <div style={{ opacity: 0 }}
               className="mt-8 flex flex-wrap gap-4"
             >
               <Link to="/login" className="btn-primary flex items-center gap-2 text-base">
                 Get Started <FiArrowRight />
               </Link>
-            </motion.div>
+            </div>
           </div>
 
           {/* Right — Globe */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1.2, delay: 0.4 }}
+          <div
             className="relative hidden h-[500px] lg:block"
+            ref={(el) => {
+              if (el && !el.dataset.animated) {
+                el.dataset.animated = '1';
+                el.style.opacity = '0';
+                el.style.transform = 'scale(0.85)';
+                anime({
+                  targets: el,
+                  opacity: [0, 1],
+                  scale: [0.85, 1],
+                  duration: 1200,
+                  delay: 500,
+                  easing: 'easeOutExpo',
+                });
+              }
+            }}
           >
             <Globe3D className="h-full w-full" />
-          </motion.div>
+          </div>
         </motion.div>
 
         {/* Scroll indicator */}
-        <motion.div
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
+        <div
           className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+          ref={(el) => {
+            if (el && !el.dataset.animated) {
+              el.dataset.animated = '1';
+              anime({
+                targets: el,
+                translateY: [-8, 8],
+                direction: 'alternate',
+                loop: true,
+                duration: 1200,
+                easing: 'easeInOutSine',
+              });
+            }
+          }}
         >
           <div className="h-10 w-6 rounded-full border-2 border-slate-400/30 flex items-start justify-center pt-2">
             <div className="h-2 w-1 rounded-full bg-accent-500 animate-pulse" />
           </div>
-        </motion.div>
+        </div>
       </header>
 
       {/* ── How It Works ── */}
@@ -176,14 +302,10 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
-            {steps.map((step, i) => (
-              <motion.div
+          <div ref={stepsGridRef} className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
+            {steps.map((step) => (
+              <div
                 key={step.num}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: i * 0.15 }}
                 className="glass-card group relative p-8 text-center"
               >
                 <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500 to-highlight-500 text-2xl text-white shadow-lg shadow-accent-500/20 transition-transform duration-300 group-hover:scale-110">
@@ -196,7 +318,7 @@ export default function Landing() {
                 <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
                   {step.desc}
                 </p>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -216,14 +338,10 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f, i) => (
-              <motion.div
+          <div ref={featuresGridRef} className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((f) => (
+              <div
                 key={f.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
                 className="glass-card group p-6"
               >
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent-500/10 text-xl text-accent-500 transition-transform duration-300 group-hover:scale-110 group-hover:bg-accent-500/20">
@@ -233,7 +351,7 @@ export default function Landing() {
                 <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
                   {f.desc}
                 </p>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>

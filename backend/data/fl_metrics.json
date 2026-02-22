@@ -1,105 +1,105 @@
 [
   {
     "round": 1,
-    "timestamp": "2026-02-22 07:47:25",
-    "globalAccuracy": 0.5,
-    "loss": 0.6957607865333557,
+    "timestamp": "2026-02-22 09:16:45",
+    "globalAccuracy": 0.5486666666666666,
+    "loss": 0.6817624966303507,
     "participants": 3,
-    "duration": "26.7s",
+    "duration": "63.4s",
     "status": "completed",
     "client_metrics": [
       {
         "client_id": 0,
-        "accuracy": 0.5,
-        "loss": 0.6973186135292053
+        "accuracy": 0.556,
+        "loss": 0.6816677451133728
       },
       {
         "client_id": 1,
-        "accuracy": 0.5,
-        "loss": 0.6934362649917603
+        "accuracy": 0.514,
+        "loss": 0.6835619807243347
       },
       {
         "client_id": 2,
-        "accuracy": 0.5,
-        "loss": 0.6965274810791016
+        "accuracy": 0.576,
+        "loss": 0.6800577640533447
       }
     ]
   },
   {
     "round": 2,
-    "timestamp": "2026-02-22 07:47:59",
-    "globalAccuracy": 0.5,
-    "loss": 0.6957607865333557,
+    "timestamp": "2026-02-22 09:17:50",
+    "globalAccuracy": 0.5486666666666666,
+    "loss": 0.6817625164985657,
     "participants": 3,
-    "duration": "29.2s",
+    "duration": "61.3s",
     "status": "completed",
     "client_metrics": [
       {
-        "client_id": 3,
-        "accuracy": 0.5,
-        "loss": 0.6934362649917603
+        "client_id": 0,
+        "accuracy": 0.514,
+        "loss": 0.6835619807243347
       },
       {
-        "client_id": 4,
-        "accuracy": 0.5,
-        "loss": 0.6965274810791016
+        "client_id": 1,
+        "accuracy": 0.556,
+        "loss": 0.6816678047180176
       },
       {
-        "client_id": 5,
-        "accuracy": 0.5,
-        "loss": 0.6973186135292053
+        "client_id": 2,
+        "accuracy": 0.576,
+        "loss": 0.6800577640533447
       }
     ]
   },
   {
     "round": 3,
-    "timestamp": "2026-02-22 07:48:35",
-    "globalAccuracy": 0.5,
-    "loss": 0.6957607269287109,
+    "timestamp": "2026-02-22 09:18:54",
+    "globalAccuracy": 0.5486666666666666,
+    "loss": 0.6817624966303507,
     "participants": 3,
-    "duration": "31.8s",
+    "duration": "59.2s",
     "status": "completed",
     "client_metrics": [
       {
-        "client_id": 6,
-        "accuracy": 0.5,
-        "loss": 0.6965274214744568
+        "client_id": 0,
+        "accuracy": 0.556,
+        "loss": 0.6816677451133728
       },
       {
-        "client_id": 7,
-        "accuracy": 0.5,
-        "loss": 0.6973185539245605
+        "client_id": 1,
+        "accuracy": 0.576,
+        "loss": 0.6800577640533447
       },
       {
-        "client_id": 8,
-        "accuracy": 0.5,
-        "loss": 0.6934362053871155
+        "client_id": 2,
+        "accuracy": 0.514,
+        "loss": 0.6835619807243347
       }
     ]
   },
   {
     "round": 4,
-    "timestamp": "2026-02-22 07:49:29",
-    "globalAccuracy": 0.5,
-    "loss": 0.6957607467969259,
+    "timestamp": "2026-02-22 09:20:01",
+    "globalAccuracy": 0.5486666666666666,
+    "loss": 0.6817624966303507,
     "participants": 3,
-    "duration": "45.4s",
+    "duration": "63.2s",
     "status": "completed",
     "client_metrics": [
       {
-        "client_id": 9,
-        "accuracy": 0.5,
-        "loss": 0.6965274810791016
+        "client_id": 0,
+        "accuracy": 0.556,
+        "loss": 0.6816677451133728
       },
       {
-        "client_id": 10,
-        "accuracy": 0.5,
-        "loss": 0.6934362053871155
+        "client_id": 1,
+        "accuracy": 0.576,
+        "loss": 0.6800577640533447
       },
       {
-        "client_id": 11,
-        "accuracy": 0.5,
-        "loss": 0.6973185539245605
+        "client_id": 2,
+        "accuracy": 0.514,
+        "loss": 0.6835619807243347
       }
     ]
   }

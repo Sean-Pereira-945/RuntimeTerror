@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ParticleBackground from '../components/ParticleBackground';
 import LoadingSpinner from '../components/LoadingSpinner';
+import anime from 'animejs';
 
 type Mode = 'login' | 'register';
 type Role = 'client' | 'admin';
@@ -17,6 +18,57 @@ export default function Login() {
   const [formError, setFormError] = useState<string | null>(null);
   const { login, register, user, isLoading, error } = useAuth();
   const navigate = useNavigate();
+
+  /* ── anime.js entrance refs ── */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const blobLeftRef = useRef<HTMLDivElement>(null);
+  const blobRightRef = useRef<HTMLDivElement>(null);
+  const backBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    // Card entrance: scale + fade from below
+    if (cardRef.current) {
+      anime({
+        targets: cardRef.current,
+        opacity: [0, 1],
+        translateY: [50, 0],
+        scale: [0.92, 1],
+        duration: 900,
+        easing: 'easeOutExpo',
+        delay: 200,
+      });
+      // Stagger form children inside card
+      anime({
+        targets: cardRef.current.querySelectorAll('.anime-stagger'),
+        opacity: [0, 1],
+        translateY: [20, 0],
+        delay: anime.stagger(70, { start: 500 }),
+        duration: 600,
+        easing: 'easeOutExpo',
+      });
+    }
+    // Back button slide-in
+    if (backBtnRef.current) {
+      anime({
+        targets: backBtnRef.current,
+        opacity: [0, 1],
+        translateX: [-30, 0],
+        duration: 700,
+        delay: 100,
+        easing: 'easeOutExpo',
+      });
+    }
+    // Ambient blob float
+    anime({
+      targets: [blobLeftRef.current, blobRightRef.current],
+      translateY: [-20, 20],
+      direction: 'alternate',
+      loop: true,
+      duration: 4000,
+      easing: 'easeInOutSine',
+      delay: anime.stagger(1000),
+    });
+  }, []);
 
   // Redirect when login completes
   useEffect(() => {
@@ -49,14 +101,16 @@ export default function Login() {
       <ParticleBackground />
 
       {/* Ambient blobs */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-violet-600/15 blur-[120px]" />
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-pink-600/10 blur-[120px]" />
+      <div ref={blobLeftRef} className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-violet-600/15 blur-[120px]" />
+      <div ref={blobRightRef} className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-pink-600/10 blur-[120px]" />
 
-      <div className="relative z-10 w-full max-w-md mx-4 animate-scale-in">
+      <div className="relative z-10 w-full max-w-md mx-4">
         {/* Back link */}
         <button
+          ref={backBtnRef}
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm dark:text-slate-400 text-slate-500 hover:text-violet-400 transition-colors mb-8 group"
+          style={{ opacity: 0 }}
         >
           <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -65,9 +119,9 @@ export default function Login() {
         </button>
 
         {/* Card */}
-        <div className="rounded-3xl glass-strong p-8 sm:p-10 shadow-2xl shadow-violet-500/5">
+        <div ref={cardRef} className="rounded-3xl glass-strong p-8 sm:p-10 shadow-2xl shadow-violet-500/5" style={{ opacity: 0 }}>
           {/* Logo */}
-          <div className="flex items-center justify-center gap-3 mb-6">
+          <div className="flex items-center justify-center gap-3 mb-6 anime-stagger" style={{ opacity: 0 }}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg shadow-violet-500/30">
               FL
             </div>
@@ -77,7 +131,7 @@ export default function Login() {
           </div>
 
           {/* Login / Register toggle */}
-          <div className="flex rounded-xl p-1 bg-white/5 mb-6">
+          <div className="flex rounded-xl p-1 bg-white/5 mb-6 anime-stagger" style={{ opacity: 0 }}>
             {(['login', 'register'] as Mode[]).map((m) => (
               <button
                 key={m}
@@ -120,7 +174,7 @@ export default function Login() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 anime-stagger" style={{ opacity: 0 }}>
             {mode === 'register' && (
               <>
                 <div>
@@ -193,7 +247,7 @@ export default function Login() {
           </form>
 
           {/* Toggle hint */}
-          <p className="mt-5 text-xs text-center dark:text-slate-500 text-slate-400">
+          <p className="mt-5 text-xs text-center dark:text-slate-500 text-slate-400 anime-stagger" style={{ opacity: 0 }}>
             {mode === 'login' ? (
               <>Don&apos;t have an account?{' '}<button onClick={() => { setMode('register'); setFormError(null); }} className="text-violet-400 hover:underline">Register</button></>
             ) : (

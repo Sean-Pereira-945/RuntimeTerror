@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import anime from 'animejs';
 import Sidebar from '../components/Sidebar';
 import MetricsCard from '../components/MetricsCard';
 import AccuracyCurve from '../components/charts/AccuracyCurve';
@@ -40,6 +41,16 @@ export default function AdminDashboard() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSeenStatus = useRef<string>('idle');
+
+  /* ── anime.js refs ── */
+  const adminHeaderRef = useRef<HTMLDivElement>(null);
+  const adminTabsRef = useRef<HTMLDivElement>(null);
+  const adminMetricsGridRef = useRef<HTMLDivElement>(null);
+  const adminTrainPanelRef = useRef<HTMLDivElement>(null);
+  const adminChartsRow1Ref = useRef<HTMLDivElement>(null);
+  const adminChartsRow2Ref = useRef<HTMLDivElement>(null);
+  const adminClientsRef = useRef<HTMLDivElement>(null);
+  const adminHistoryRef = useRef<HTMLDivElement>(null);
 
   const refreshDashData = useCallback(() => {
     fetchMetrics().then(data => setAdminMetrics(data.adminMetrics || []));
@@ -91,6 +102,96 @@ export default function AdminDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ── anime.js page entrance timeline ── */
+  useEffect(() => {
+    const tl = anime.timeline({ easing: 'easeOutExpo' });
+
+    if (adminHeaderRef.current) {
+      tl.add({
+        targets: adminHeaderRef.current,
+        opacity: [0, 1],
+        translateY: [-20, 0],
+        duration: 700,
+      }, 50);
+    }
+
+    if (adminTabsRef.current) {
+      tl.add({
+        targets: adminTabsRef.current.children,
+        opacity: [0, 1],
+        translateY: [15, 0],
+        scale: [0.95, 1],
+        delay: anime.stagger(60),
+        duration: 500,
+        easing: 'easeOutBack',
+      }, 200);
+    }
+
+    if (adminMetricsGridRef.current) {
+      tl.add({
+        targets: adminMetricsGridRef.current.children,
+        opacity: [0, 1],
+        translateY: [30, 0],
+        scale: [0.93, 1],
+        delay: anime.stagger(90),
+        duration: 650,
+        easing: 'easeOutBack',
+      }, 350);
+    }
+
+    if (adminTrainPanelRef.current) {
+      tl.add({
+        targets: adminTrainPanelRef.current,
+        opacity: [0, 1],
+        translateY: [25, 0],
+        duration: 600,
+      }, 600);
+    }
+
+    if (adminChartsRow1Ref.current) {
+      tl.add({
+        targets: adminChartsRow1Ref.current.children,
+        opacity: [0, 1],
+        translateX: (_el: Element, i: number) => (i === 0 ? [-30, 0] : [30, 0]),
+        duration: 700,
+        delay: anime.stagger(100),
+      }, 800);
+    }
+
+    if (adminChartsRow2Ref.current) {
+      tl.add({
+        targets: adminChartsRow2Ref.current.children,
+        opacity: [0, 1],
+        translateY: [25, 0],
+        delay: anime.stagger(100),
+        duration: 600,
+      }, 1000);
+    }
+
+    if (adminClientsRef.current) {
+      tl.add({
+        targets: adminClientsRef.current.children,
+        opacity: [0, 1],
+        translateY: [20, 0],
+        scale: [0.96, 1],
+        delay: anime.stagger(80),
+        duration: 500,
+        easing: 'easeOutBack',
+      }, 1150);
+    }
+
+    if (adminHistoryRef.current) {
+      tl.add({
+        targets: adminHistoryRef.current,
+        opacity: [0, 1],
+        translateY: [25, 0],
+        duration: 600,
+      }, 1300);
+    }
+
+    return () => tl.pause();
+  }, []);
+
   const startPolling = () => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
@@ -139,7 +240,7 @@ export default function AdminDashboard() {
       {/* Main content */}
       <main className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className={`mb-8 transition-all duration-500 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div ref={adminHeaderRef} className={`mb-8`} style={{ opacity: 0 }}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold dark:text-white text-slate-900">
@@ -165,7 +266,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tab Navigation */}
-        <div className={`flex flex-wrap gap-2 mb-6 transition-all duration-600 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div ref={adminTabsRef} className={`flex flex-wrap gap-2 mb-6`}>
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -183,9 +284,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Metrics Grid — always visible */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div ref={adminMetricsGridRef} className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8`}>
           {adminMetrics.map((metric, i) => (
-            <div key={metric.id} style={{ animationDelay: `${i * 100}ms` }} className="animate-scale-in">
+            <div key={metric.id} style={{ opacity: 0 }}>
               <MetricsCard metric={metric} />
             </div>
           ))}
@@ -195,8 +296,8 @@ export default function AdminDashboard() {
         {activeTab === 'overview' && (
           <>
             {/* Training Control Panel */}
-            <div className={`mb-8 transition-all duration-800 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="rounded-2xl glass p-6 animate-fade-in" style={{ animationDelay: '350ms' }}>
+            <div ref={adminTrainPanelRef} className={`mb-8`} style={{ opacity: 0 }}>
+              <div className="rounded-2xl glass p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold dark:text-white text-slate-900 flex items-center gap-2">
                     <span className="text-lg">🚀</span> Federated Training
@@ -302,32 +403,32 @@ export default function AdminDashboard() {
             </div>
 
             {/* Charts Row */}
-            <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8 transition-all duration-900 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="animate-fade-in" style={{ animationDelay: '400ms' }}>
+            <div ref={adminChartsRow1Ref} className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8`}>
+              <div style={{ opacity: 0 }}>
                 <AccuracyCurve refreshTrigger={historyRefresh} />
               </div>
-              <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
+              <div style={{ opacity: 0 }}>
                 <ClientComparison refreshTrigger={historyRefresh} />
               </div>
             </div>
 
             {/* Heatmap + Radar */}
-            <div className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8 transition-all duration-900 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
+            <div ref={adminChartsRow2Ref} className={`grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8`}>
+              <div style={{ opacity: 0 }}>
                 <AccuracyHeatmap refreshTrigger={historyRefresh} />
               </div>
-              <div className="animate-fade-in" style={{ animationDelay: '700ms' }}>
+              <div style={{ opacity: 0 }}>
                 <ContributionRadar refreshTrigger={historyRefresh} />
               </div>
             </div>
 
             {/* Clients status strip */}
-            <div className={`grid sm:grid-cols-3 gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              {clients.map((client, i) => (
+            <div ref={adminClientsRef} className={`grid sm:grid-cols-3 gap-4 sm:gap-6 mb-8`}>
+              {clients.map((client) => (
                 <div
                   key={client.id}
-                  className="rounded-2xl glass p-5 flex items-center gap-4 group hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1 animate-fade-in"
-                  style={{ animationDelay: `${800 + i * 100}ms` }}
+                  className="rounded-2xl glass p-5 flex items-center gap-4 group hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1"
+                  style={{ opacity: 0 }}
                 >
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg flex-shrink-0"
@@ -351,8 +452,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* Training History Table */}
-            <div className={`transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="animate-fade-in" style={{ animationDelay: '1100ms' }}>
+            <div ref={adminHistoryRef} style={{ opacity: 0 }}>
+              <div>
                 <TrainingHistoryTable refreshTrigger={historyRefresh} />
               </div>
             </div>

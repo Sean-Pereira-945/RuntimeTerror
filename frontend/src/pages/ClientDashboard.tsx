@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import anime from 'animejs';
 import { startTraining as apiStartTraining, uploadPreview, finalizeUpload, fetchTrainingStatus } from '../api';
 import type { UploadPreview, TrainingStatus as TrainingStat } from '../api';
 import {
@@ -55,6 +56,15 @@ export default function ClientDashboard() {
   const [dynamicLabels, setDynamicLabels] = useState<string[]>([]);
   const [personalData, setPersonalData] = useState<ClientPersonalData | null>(null);
 
+  /* ── anime.js refs ── */
+  const headerRef = useRef<HTMLDivElement>(null);
+  const metricsGridRef = useRef<HTMLDivElement>(null);
+  const uploadCardRef = useRef<HTMLDivElement>(null);
+  const trainingCardRef = useRef<HTMLDivElement>(null);
+  const perfCardRef = useRef<HTMLDivElement>(null);
+  const heatmapRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -74,6 +84,82 @@ export default function ClientDashboard() {
     const timer = setTimeout(() => setLoaded(true), 100);
     return () => clearTimeout(timer);
   }, [user]);
+
+  /* ── anime.js page entrance timeline ── */
+  useEffect(() => {
+    const tl = anime.timeline({ easing: 'easeOutExpo' });
+
+    // Header slide-in
+    if (headerRef.current) {
+      tl.add({
+        targets: headerRef.current,
+        opacity: [0, 1],
+        translateY: [-20, 0],
+        duration: 700,
+      }, 50);
+    }
+
+    // Metric cards stagger
+    if (metricsGridRef.current) {
+      tl.add({
+        targets: metricsGridRef.current.children,
+        opacity: [0, 1],
+        translateY: [30, 0],
+        scale: [0.94, 1],
+        delay: anime.stagger(80),
+        duration: 600,
+        easing: 'easeOutBack',
+      }, 200);
+    }
+
+    // Upload + Training cards slide-in from sides
+    if (uploadCardRef.current) {
+      tl.add({
+        targets: uploadCardRef.current,
+        opacity: [0, 1],
+        translateX: [-40, 0],
+        duration: 700,
+      }, 500);
+    }
+    if (trainingCardRef.current) {
+      tl.add({
+        targets: trainingCardRef.current,
+        opacity: [0, 1],
+        translateX: [40, 0],
+        duration: 700,
+      }, 550);
+    }
+
+    // Performance card
+    if (perfCardRef.current) {
+      tl.add({
+        targets: perfCardRef.current,
+        opacity: [0, 1],
+        translateY: [30, 0],
+        duration: 600,
+      }, 750);
+    }
+
+    // Heatmap + History
+    if (heatmapRef.current) {
+      tl.add({
+        targets: heatmapRef.current,
+        opacity: [0, 1],
+        translateY: [30, 0],
+        duration: 600,
+      }, 850);
+    }
+    if (historyRef.current) {
+      tl.add({
+        targets: historyRef.current,
+        opacity: [0, 1],
+        translateY: [30, 0],
+        duration: 600,
+      }, 950);
+    }
+
+    return () => tl.pause();
+  }, []);
 
 
 
@@ -323,7 +409,7 @@ export default function ClientDashboard() {
 
       <main className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className={`mb-8 transition-all duration-500 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div ref={headerRef} className={`mb-8`} style={{ opacity: 0 }}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold dark:text-white text-slate-900">Training Interface</h1>
@@ -342,14 +428,14 @@ export default function ClientDashboard() {
         </div>
 
         {/* Status + Quick Metrics */}
-        <div className={`grid sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div ref={metricsGridRef} className={`grid sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-8`}>
           {[
             { label: 'Local Accuracy', value: dynamicAccuracy + '%', icon: <FiTarget className="w-5 h-5" />, color: 'from-blue-500 to-cyan-400' },
             { label: 'Dataset Size', value: (personalData?.datasetSize ?? 0).toLocaleString(), icon: <FiDatabase className="w-5 h-5" />, color: 'from-violet-500 to-purple-400' },
             { label: 'Rounds Trained', value: String(dynamicRounds), icon: <FiRefreshCw className="w-5 h-5" />, color: 'from-pink-500 to-rose-400' },
             { label: 'Model Version', value: personalData?.modelVersion ?? 'v0.0', icon: <FiCpu className="w-5 h-5" />, color: 'from-amber-500 to-orange-400' },
           ].map((m, i) => (
-            <div key={m.label} className="rounded-2xl glass p-5 group hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1 animate-scale-in" style={{ animationDelay: `${i * 100}ms` }}>
+            <div key={m.label} className="rounded-2xl glass p-5 group hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1" style={{ opacity: 0 }}>
               <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${m.color} opacity-80 rounded-t-2xl`} />
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-500/20 to-highlight-500/20 flex items-center justify-center text-accent-400 mb-2">{m.icon}</div>
               <div className="text-2xl font-extrabold dark:text-white text-slate-900">{m.value}</div>
@@ -360,7 +446,7 @@ export default function ClientDashboard() {
 
         <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
           {/* File Upload + Column Selector */}
-          <div className={`rounded-2xl glass p-6 transition-all duration-800 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div ref={uploadCardRef} className={`rounded-2xl glass p-6`} style={{ opacity: 0 }}>
             <h3 className="font-semibold dark:text-white text-slate-900 mb-4 flex items-center gap-2">
               <FiUploadCloud className="w-5 h-5 text-accent-400" /> Upload Training Data
             </h3>
@@ -528,7 +614,7 @@ export default function ClientDashboard() {
           </div>
 
           {/* Training Control */}
-          <div className={`rounded-2xl glass p-6 transition-all duration-900 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div ref={trainingCardRef} className={`rounded-2xl glass p-6`} style={{ opacity: 0 }}>
             <h3 className="font-semibold dark:text-white text-slate-900 mb-4 flex items-center gap-2">
               <FiPlay className="w-5 h-5 text-accent-400" /> Local Training
             </h3>
@@ -623,7 +709,7 @@ export default function ClientDashboard() {
         </div>
 
         {/* Simplified Accuracy Trend */}
-        <div className={`rounded-2xl glass p-6 mb-8 transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div ref={perfCardRef} className={`rounded-2xl glass p-6 mb-8`} style={{ opacity: 0 }}>
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold dark:text-white text-slate-900">Performance Status</h3>
@@ -656,12 +742,12 @@ export default function ClientDashboard() {
         </div>
 
         {/* Accuracy Heatmap - The only allowed advanced visualization */}
-        <div className={`transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div ref={heatmapRef} style={{ opacity: 0 }}>
           <AccuracyHeatmap refreshTrigger={historyRefresh} />
         </div>
 
         {/* Training History Table */}
-        <div className={`mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div ref={historyRef} className={`mt-6`} style={{ opacity: 0 }}>
           <TrainingHistoryTable refreshTrigger={historyRefresh} />
         </div>
       </main>

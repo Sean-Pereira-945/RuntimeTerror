@@ -1,13 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import { FiBarChart2, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
+import anime from 'animejs';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const headerBarRef = useRef<HTMLElement>(null);
+  const navItemsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Header bar slide-down entrance
+    if (headerBarRef.current) {
+      anime({
+        targets: headerBarRef.current,
+        translateY: [-50, 0],
+        opacity: [0, 1],
+        duration: 800,
+        easing: 'easeOutExpo',
+      });
+    }
+    // Nav items stagger
+    if (navItemsRef.current) {
+      anime({
+        targets: navItemsRef.current.children,
+        opacity: [0, 1],
+        translateX: [-15, 0],
+        delay: anime.stagger(60, { start: 300 }),
+        duration: 500,
+        easing: 'easeOutExpo',
+      });
+    }
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -15,7 +42,7 @@ export default function Sidebar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl border-b border-white/10 dark:border-white/5">
+    <header ref={headerBarRef} className="sticky top-0 z-50 w-full dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl border-b border-white/10 dark:border-white/5" style={{ opacity: 0 }}>
       <div className="flex items-center justify-between px-4 sm:px-6 h-16">
         {/* Left: logo + nav */}
         <div className="flex items-center gap-6">
@@ -39,7 +66,7 @@ export default function Sidebar() {
         </div>
 
         {/* Right: theme + user + logout */}
-        <div className="flex items-center gap-3">
+        <div ref={navItemsRef} className="flex items-center gap-3">
           <ThemeToggle />
 
           {/* User pill — desktop */}
@@ -72,7 +99,22 @@ export default function Sidebar() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-white/5 px-4 py-3 space-y-3 dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl">
+        <div
+          className="md:hidden border-t border-white/5 px-4 py-3 space-y-3 dark:bg-slate-900/95 bg-white/95 backdrop-blur-xl"
+          ref={(el) => {
+            if (el && !el.dataset.animated) {
+              el.dataset.animated = '1';
+              anime({
+                targets: el.children,
+                opacity: [0, 1],
+                translateY: [-10, 0],
+                delay: anime.stagger(60),
+                duration: 400,
+                easing: 'easeOutExpo',
+              });
+            }
+          }}
+        >
           <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500/20 to-pink-500/10 dark:text-white text-slate-900 text-sm font-medium">
             <FiBarChart2 className="w-4 h-4" />
             Dashboard
