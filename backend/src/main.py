@@ -28,6 +28,7 @@ def _write_status(status: str, **extra):
 
 def run_server(num_clients, server_address, num_rounds):
     strategy = SaveMetricsStrategy(
+        num_rounds=num_rounds,
         fraction_fit=1.0, 
         fraction_evaluate=1.0,
         min_fit_clients=num_clients,
@@ -45,7 +46,9 @@ def run_client_process(cid, store_name, server_address):
     device = torch.device('cpu')
     
     dataset = get_store_dataset(store_name, num_samples=200)
-    model = TransformerWrapper(PRETRAINED_PATH if os.path.exists(PRETRAINED_PATH) else None)
+    global_model_path = os.path.join(BACKEND_DIR, "global_model.pth")
+    model_path = global_model_path if os.path.exists(global_model_path) else (PRETRAINED_PATH if os.path.exists(PRETRAINED_PATH) else None)
+    model = TransformerWrapper(model_path)
     client = NLPClient(
         client_id=int(cid) if str(cid).isdigit() else hash(str(cid)) % 10000,
         store_name=store_name,

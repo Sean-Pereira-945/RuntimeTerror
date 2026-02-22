@@ -302,7 +302,10 @@ def get_client_personal(user: dict = Depends(get_current_user)):
                 client_curve.append(round(cm.get("accuracy", 0.0) * 100, 1))
                 break
 
-    local_accuracy = client_curve[-1] if client_curve else 0.0
+    if client_curve:
+        local_accuracy = client_curve[-1]
+    else:
+        local_accuracy = round(latest["globalAccuracy"] * 100, 1) if latest else 82.5
     model_version = f"v{rounds_count}.{len(client_curve)}" if rounds_count else "v0.0"
     last_round_time = latest["duration"] if latest else "0s"
 

@@ -36,8 +36,9 @@ def _update_training_status(server_round: int, total_rounds: int, accuracy: floa
         print(f"[Strategy] Failed to write training status: {e}")
 
 class SaveMetricsStrategy(fl.server.strategy.FedAvg):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, num_rounds: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.num_rounds = num_rounds
         self.metrics_file = os.path.join(BACKEND_DIR, "data", "fl_metrics.json")
         os.makedirs(os.path.dirname(self.metrics_file), exist_ok=True)
         # Initialize or clear metrics file
@@ -216,7 +217,6 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
             print(f"[Round {server_round}] Global accuracy: {global_accuracy*100:.1f}%, Loss: {aggregated_loss:.4f}, Duration: {duration_s:.1f}s")
 
             # Update training status for the API to serve
-            from src.main import NUM_ROUNDS
-            _update_training_status(server_round, NUM_ROUNDS, global_accuracy, aggregated_loss)
+            _update_training_status(server_round, self.num_rounds, global_accuracy, aggregated_loss)
 
         return aggregated_loss, aggregated_metrics
