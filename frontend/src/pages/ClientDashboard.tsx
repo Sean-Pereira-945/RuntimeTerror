@@ -149,7 +149,8 @@ export default function ClientDashboard() {
       // Refresh personal data
       const data = await fetchClientPersonal();
       setPersonalData(data);
-      setTimeout(() => setStatus('idle'), 700);
+      // Auto-start training after successful upload
+      setTimeout(() => startTraining(), 500);
     } catch (error: unknown) {
       setColError(error instanceof Error ? error.message : 'Save failed');
       setStatus('idle');
@@ -430,7 +431,7 @@ export default function ClientDashboard() {
                   disabled={!textCol || !labelCol}
                   className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                 >
-                  Confirm & Save Dataset
+                  Confirm & Start Training
                 </button>
               </div>
             )}
