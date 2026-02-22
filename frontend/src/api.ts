@@ -89,7 +89,10 @@ export async function startTraining() {
     });
     if (!response.ok) {
         const err = await response.json().catch(() => ({ detail: 'Training failed' }));
-        throw new Error(err.detail || 'Failed to start training');
+        const detail = Array.isArray(err.detail)
+            ? err.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ')
+            : err.detail;
+        throw new Error(detail || 'Failed to start training');
     }
     return await response.json();
 }
@@ -135,7 +138,10 @@ export async function uploadPreview(file: File): Promise<UploadPreview> {
     });
     if (!response.ok) {
         const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(err.detail || 'Upload preview failed');
+        const detail = Array.isArray(err.detail)
+            ? err.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ')
+            : err.detail;
+        throw new Error(detail || 'Upload preview failed');
     }
     return response.json();
 }
@@ -157,7 +163,10 @@ export async function finalizeUpload(
     });
     if (!response.ok) {
         const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(err.detail || 'Finalize upload failed');
+        const detail = Array.isArray(err.detail)
+            ? err.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ')
+            : err.detail;
+        throw new Error(detail || 'Finalize upload failed');
     }
     return response.json();
 }
