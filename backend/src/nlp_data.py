@@ -36,45 +36,76 @@ class ReviewDataset(Dataset):
         
         return input_ids, attention_mask, label
 
+
+# ── Rich template bank for synthetic reviews ──────────────────────────
+_ADJECTIVES_POS = ["amazing", "fantastic", "wonderful", "excellent", "superb",
+                   "outstanding", "brilliant", "incredible", "perfect", "great"]
+_ADJECTIVES_NEG = ["terrible", "horrible", "awful", "dreadful", "abysmal",
+                   "pathetic", "disgusting", "horrendous", "atrocious", "lousy"]
+
+_POSITIVE_TEMPLATES = [
+    "I absolutely love this {item}. It is {adj}!",
+    "This {item} is {adj} and works perfectly every day.",
+    "Best {item} I have ever purchased. Totally {adj}.",
+    "Very satisfied with this {item}. The quality is {adj}.",
+    "{adj} value for money. This {item} exceeded my expectations.",
+    "I would recommend this {item} to everyone. Simply {adj}.",
+    "Really happy with my new {item}. Performance is {adj}.",
+    "Five stars for this {item}! Everything about it is {adj}.",
+    "This {item} changed my life. The experience was {adj}.",
+    "Can't stop using this {item}. The design is {adj}.",
+    "I bought this {item} for my family and they all think it is {adj}.",
+    "After months of use this {item} still feels {adj}.",
+    "Shipping was fast and the {item} itself is truly {adj}.",
+    "High quality materials make this {item} genuinely {adj}.",
+    "Customer service was helpful and the {item} arrived in {adj} condition.",
+]
+
+_NEGATIVE_TEMPLATES = [
+    "I hate this {item}. It is {adj}.",
+    "Worst {item} ever. The quality is {adj}. Do not buy.",
+    "This {item} broke after one day. Absolutely {adj}.",
+    "{adj} experience with this {item}. Total waste of money.",
+    "The {item} is so {adj} I want a refund immediately.",
+    "I regret buying this {item}. Build quality is {adj}.",
+    "Do not waste your money on this {item}. It is {adj}.",
+    "This {item} does not work at all. Performance is {adj}.",
+    "Returned this {item} the same day. Everything about it is {adj}.",
+    "I waited weeks for this {item} and it was {adj}.",
+    "The packaging was damaged and the {item} inside was even more {adj}.",
+    "Save yourself the trouble, this {item} is genuinely {adj}.",
+    "My old {item} was better than this {adj} replacement.",
+    "I expected more from this {item} but it is just {adj}.",
+    "This {item} stopped working in a week. Truly {adj} craftsmanship.",
+]
+
+_ITEM_MAP = {
+    "Phone": ["phone", "smartphone", "cell phone", "mobile phone", "handset"],
+    "Clothing": ["shirt", "jacket", "dress", "outfit", "sweater"],
+    "Food": ["meal", "dish", "snack", "recipe", "food box"],
+}
+
+
 def generate_synthetic_reviews(store_name, num_samples=1000):
-    positive_templates = [
-        "I absolutely love this {}.",
-        "This {} is amazing and works perfectly.",
-        "Great quality {}. Highly recommend.",
-        "Best {} I have ever purchased.",
-        "Very satisfied with this {}."
-    ]
-    negative_templates = [
-        "I hate this {}. It is terrible.",
-        "Worst {} ever. Do not buy.",
-        "This {} broke immediately.",
-        "Awful experience with this {}.",
-        "The {} is very poor quality."
-    ]
-    
-    item_type = "product"  # default fallback
-    if store_name == "Phone":
-        item_type = "phone"
-    elif store_name == "Clothing":
-        item_type = "shirt"
-    elif store_name == "Food":
-        item_type = "meal"
-        
+    """Generate diverse synthetic reviews with random adjective + item combinations."""
+    items = _ITEM_MAP.get(store_name, ["product", "item", "purchase"])
     texts = []
     labels = []
-    
-    # 50% positive (label 1), 50% negative (label 0)
+
     for _ in range(num_samples // 2):
-        texts.append(random.choice(positive_templates).format(item_type))
+        # Positive sample
+        tmpl = random.choice(_POSITIVE_TEMPLATES)
+        texts.append(tmpl.format(item=random.choice(items), adj=random.choice(_ADJECTIVES_POS)))
         labels.append(1)
-        
-        texts.append(random.choice(negative_templates).format(item_type))
+
+        # Negative sample
+        tmpl = random.choice(_NEGATIVE_TEMPLATES)
+        texts.append(tmpl.format(item=random.choice(items), adj=random.choice(_ADJECTIVES_NEG)))
         labels.append(0)
-        
+
     combined = list(zip(texts, labels))
     random.shuffle(combined)
     texts, labels = zip(*combined)
-    
     return list(texts), list(labels)
 
 def get_store_dataset(store_name, num_samples=1000):

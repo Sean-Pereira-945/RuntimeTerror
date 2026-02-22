@@ -449,23 +449,25 @@ def get_client_uptimes_db(history: list | None = None, client_ids: list | None =
     if total_rounds == 0:
         return {}
 
+    _STORE_NAMES = {0: "Phone", 1: "Clothing", 2: "Food"}
+
     # Build stable short-name mapping from client_ids
     if client_ids is None:
-        seen: dict[str, None] = {}
+        seen: dict[int, None] = {}
         for h in history:
             for cm in h.get("client_metrics", []):
-                cid = cm.get("client_id", "")
-                if cid and cid not in seen:
+                cid = cm.get("client_id")
+                if cid is not None and cid not in seen:
                     seen[cid] = None
-        client_ids = list(seen.keys())
+        client_ids = sorted(seen.keys())
 
-    id_to_short = {cid: f"Client {i+1}" for i, cid in enumerate(client_ids)}
+    id_to_short = {cid: _STORE_NAMES.get(cid, f"Client {i+1}") for i, cid in enumerate(client_ids)}
 
     # Count how many rounds each client actually participated in
     participation: Dict[str, int] = {name: 0 for name in id_to_short.values()}
     for h in history:
         for cm in h.get("client_metrics", []):
-            short = id_to_short.get(cm.get("client_id", ""))
+            short = id_to_short.get(cm.get("client_id"))
             if short:
                 participation[short] += 1
 

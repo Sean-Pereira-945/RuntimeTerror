@@ -46,14 +46,15 @@ def run_client_process(cid):
     stores = ["Phone", "Clothing", "Food"]
     store_name = stores[int(cid)]
     
-    dataset = get_store_dataset(store_name, num_samples=200)
+    dataset = get_store_dataset(store_name, num_samples=500)
     model = TransformerWrapper(PRETRAINED_PATH if os.path.exists(PRETRAINED_PATH) else None)
     client = NLPClient(
         client_id=int(cid),
         store_name=store_name,
         model=model,
         dataset=dataset,
-        lr=2e-5,
+        batch_size=16,
+        lr=5e-5,
         device=device
     )
     

@@ -181,15 +181,15 @@ def get_metrics(user: dict = Depends(get_current_user)):
 # ── Palette & helpers for dynamic client discovery ─────────────────
 _CLIENT_COLORS = ["#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#6366f1"]
 
-def _discover_clients(history: list) -> list[str]:
+def _discover_clients(history: list) -> list[int]:
     """Return a stable-ordered list of unique FL client_ids seen across all rounds."""
-    seen: dict[str, None] = {}  # insertion-order dict
+    seen: dict[int, None] = {}  # insertion-order dict
     for h in history:
         for cm in h.get("client_metrics", []):
-            cid = cm.get("client_id", "")
-            if cid and cid not in seen:
+            cid = cm.get("client_id")
+            if cid is not None and cid not in seen:
                 seen[cid] = None
-    return list(seen.keys())
+    return sorted(seen.keys())
 
 
 @app.get("/api/clients")
@@ -198,17 +198,18 @@ def get_clients(user: dict = Depends(get_current_user)):
     client_ids = _discover_clients(history)
     rounds_count = len(history)
 
-    # Build per-client accuracy curves keyed by short name
-    id_to_short: dict[str, str] = {}
+    # Map client_id → short display name (use FL store names when possible)
+    _STORE_NAMES = {0: "Phone", 1: "Clothing", 2: "Food"}
+    id_to_short: dict[int, str] = {}
     for i, cid in enumerate(client_ids):
-        id_to_short[cid] = f"Client {i + 1}"
+        id_to_short[cid] = _STORE_NAMES.get(cid, f"Client {i + 1}")
 
     client_curves: dict[str, list] = {name: [] for name in id_to_short.values()}
 
     for h in history:
         seen_this_round: set[str] = set()
         for cm in h.get("client_metrics", []):
-            cid = cm.get("client_id", "")
+            cid = cm.get("client_id")
             short = id_to_short.get(cid)
             if short and short not in seen_this_round:
                 client_curves[short].append(round(cm.get("accuracy", 0.0) * 100, 1))
@@ -219,7 +220,7 @@ def get_clients(user: dict = Depends(get_current_user)):
     latest_losses: dict[str, float] = {}
     if history:
         for cm in history[-1].get("client_metrics", []):
-            cid = cm.get("client_id", "")
+            cid = cm.get("client_id")
             short = id_to_short.get(cid)
             if short:
                 loss = cm.get("loss", 1.0)
@@ -237,9 +238,9 @@ def get_clients(user: dict = Depends(get_current_user)):
         curve = client_curves.get(short, [])
         clients_res.append({
             "id": cid,
-            "name": f"FL Client {i + 1}",
+            "name": f"FL Client — {short}",
             "shortName": short,
-            "dataPoints": 200,
+            "dataPoints": 500,
             "color": color,
             "contribution": contribution,
             "roundsParticipated": sum(1 for v in client_curves.get(short, []) if v is not None),
@@ -358,6 +359,16 @@ def _write_training_status(data: dict):
 def run_fl_background():
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     try:
+        # Clear old metrics from the database before starting fresh training
+        try:
+            from src.database import get_db
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute("DELETE FROM fl_metrics")
+                print("[DB] Cleared old fl_metrics before new training run")
+        except Exception as e:
+            print(f"[DB] Warning: could not clear old metrics: {e}")
+
         subprocess.run(["python", "-m", "src.main"], check=True, cwd=backend_dir)
         # Sync new metrics into the database after training completes
         sync_json_metrics_to_db()

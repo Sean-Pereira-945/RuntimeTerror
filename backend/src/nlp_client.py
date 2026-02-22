@@ -7,7 +7,7 @@ from collections import OrderedDict
 import random
 
 class NLPClient(fl.client.NumPyClient):
-    def __init__(self, client_id, store_name, model, dataset, batch_size=32, lr=0.01, device='cpu', low_compute=False):
+    def __init__(self, client_id, store_name, model, dataset, batch_size=16, lr=5e-5, device='cpu', low_compute=False):
         self.client_id = client_id
         self.store_name = store_name
         self.device = device
@@ -15,7 +15,7 @@ class NLPClient(fl.client.NumPyClient):
         self.batch_size = batch_size
         self.model = model.to(self.device)
         self.dataset = dataset
-        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True, drop_last=False)
         self.low_compute = low_compute
         
     def get_parameters(self, config):
@@ -32,13 +32,11 @@ class NLPClient(fl.client.NumPyClient):
         """Set model parameters, train model, return updated model parameters."""
         self.set_parameters(parameters)
         
-        # Asynchronous/Random Epoch simulation (Requirement #3)
-        # If low_compute is active, we force 1 epoch to save resources.
         if self.low_compute:
-            epochs = 1
-            print(f"[Client {self.store_name}] Low-Compute Mode Active. Training for 1 epoch...")
+            epochs = 2
+            print(f"[Client {self.store_name}] Low-Compute Mode Active. Training for 2 epochs...")
         else:
-            epochs = random.randint(2, 5)
+            epochs = 3
             print(f"[Client {self.store_name}] Training for {epochs} epochs...")
         
         self.train(epochs)
@@ -51,19 +49,27 @@ class NLPClient(fl.client.NumPyClient):
         return loss, len(self.dataset), {"accuracy": accuracy}
         
     def train(self, epochs):
-        """Train the model locally."""
+        """Train the model locally with gradient clipping for stable DistilBERT fine-tuning."""
         self.model.train()
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=0.01)
         
         for epoch in range(epochs):
+            epoch_loss = 0.0
             for input_ids, attention_mask, target in self.dataloader:
-                input_ids, attention_mask, target = input_ids.to(self.device), attention_mask.to(self.device), target.to(self.device)
+                input_ids = input_ids.to(self.device)
+                attention_mask = attention_mask.to(self.device)
+                target = target.to(self.device)
                 optimizer.zero_grad()
                 output = self.model(input_ids, attention_mask)
                 loss = criterion(output, target)
                 loss.backward()
+                # Gradient clipping prevents exploding gradients in transformer fine-tuning
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 optimizer.step()
+                epoch_loss += loss.item()
+            avg_loss = epoch_loss / max(len(self.dataloader), 1)
+            print(f"  [{self.store_name}] Epoch {epoch+1}/{epochs} — loss: {avg_loss:.4f}")
                 
     def eval_model(self):
         """Evaluate the model and return loss and accuracy."""

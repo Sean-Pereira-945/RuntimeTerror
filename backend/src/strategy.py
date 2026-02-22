@@ -9,7 +9,6 @@ import torch
 from src.transformer_model import TransformerWrapper
 from flwr.common import FitRes, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
-from src.contribution import calculate_shapley_weights
 
 # Resolve paths relative to backend/ directory
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -47,19 +46,8 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
         # Create model shell once for weight injection (avoids re-downloading every round)
         self._model = TransformerWrapper()
         
-        # Map Flower UUID client IDs → sequential integers (0, 1, 2)
-        self.client_id_map: Dict[str, int] = {}
-        self._next_client_id = 0
-        
         # Track round start times for duration calculation
         self._round_start_time: Optional[float] = None
-
-    def _get_sequential_id(self, flower_cid: str) -> int:
-        """Map a Flower UUID client ID to a stable sequential integer."""
-        if flower_cid not in self.client_id_map:
-            self.client_id_map[flower_cid] = self._next_client_id
-            self._next_client_id += 1
-        return self.client_id_map[flower_cid]
 
     def aggregate_fit(
         self,
@@ -69,26 +57,20 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         
         self._round_start_time = time.time()
-        
-        # Register client IDs during fit
-        for client, _ in results:
-            self._get_sequential_id(client.cid)
 
         if not results:
             return None, {}
 
         # ── Krum & Cosine Filtering ──────────────────────────────────────
-        # Convert parameters to ndarrays for distance/similarity calculation
         client_ndarrays = [parameters_to_ndarrays(res.parameters) for _, res in results]
-        
-        # Flatten and concatenate weight arrays for each client to get a single vector
         vectors = [np.concatenate([a.flatten() for a in nds]) for nds in client_ndarrays]
         
         num_clients = len(vectors)
-        f = 1  # Number of tolerated byzantine clients
-        m = num_clients - f - 2 # Neighbors to consider
         
         if num_clients > 2:
+            f = 1  # Number of tolerated byzantine clients
+            m = max(1, num_clients - f - 2)
+            
             # 1. Krum Scoring
             scores = []
             for i in range(num_clients):
@@ -97,7 +79,7 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
                     if i == j: continue
                     dists.append(np.linalg.norm(vectors[i] - vectors[j])**2)
                 dists.sort()
-                scores.append(sum(dists[:max(1, m)]))
+                scores.append(sum(dists[:m]))
             
             # 2. Cosine Similarity Check (relative to mean of all updates)
             mean_vector = np.mean(vectors, axis=0)
@@ -106,39 +88,25 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
                 sim = np.dot(v, mean_vector) / (np.linalg.norm(v) * np.linalg.norm(mean_vector) + 1e-9)
                 similarities.append(sim)
             
-            # Combine logic: keep clients with good similarity OR the best Krum winner
-            best_idx = np.argmin(scores)
-            accepted_indices = [i for i, sim in enumerate(similarities) if sim > 0.6]
+            best_idx = int(np.argmin(scores))
+            # Use a lenient threshold — only reject extremely divergent updates
+            accepted_indices = [i for i, sim in enumerate(similarities) if sim > 0.3]
             
-            # Ensure at least the Krum winner is included
             if best_idx not in accepted_indices:
                 accepted_indices.append(best_idx)
             
-            print(f"[Security] Round {server_round}: Filtered {num_clients - len(accepted_indices)} anomalous updates.")
+            # Ensure we keep at least 2 clients for meaningful averaging
+            if len(accepted_indices) < 2:
+                accepted_indices = list(range(num_clients))
+            
+            if len(accepted_indices) < num_clients:
+                print(f"[Security] Round {server_round}: Filtered {num_clients - len(accepted_indices)} anomalous updates.")
             
             filtered_results = [results[i] for i in accepted_indices]
-            filtered_vectors = [vectors[i] for i in accepted_indices]
         else:
             filtered_results = results
-            filtered_vectors = vectors
 
-        # ── Shapley Weighted Aggregation ──────────────────────────────────
-        if filtered_results:
-            # We use Gradient Cosine Similarity as a Shapley approximation
-            # relative to the mean of the filtered (clean) updates.
-            clean_mean_vector = np.mean(filtered_vectors, axis=0)
-            shapley_weights = calculate_shapley_weights(filtered_vectors, clean_mean_vector)
-            
-            print(f"[Shapley] Round {server_round}: Calculated contribution weights: {shapley_weights}")
-            
-            # Create weighted updates for aggregation
-            # We override the sample counts in FitRes with Shapley-based weights 
-            # to influence FedAvg's weighted average.
-            total_weight = sum(shapley_weights)
-            for i, (client, res) in enumerate(filtered_results):
-                # Map 0-1 weight back to a 'virtual' sample count for FedAvg
-                res.num_examples = int(shapley_weights[i] * 1000) 
-        
+        # ── Standard FedAvg aggregation (use real sample counts) ─────────
         aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, filtered_results, failures)
         
         if aggregated_parameters is not None:
@@ -175,12 +143,11 @@ class SaveMetricsStrategy(fl.server.strategy.FedAvg):
             duration_s = time.time() - self._round_start_time
         
         if aggregated_loss is not None:
-            # Gather client accuracies with mapped sequential IDs
+            # Use position-based client IDs (0, 1, 2) — stable across rounds
             client_metrics = []
-            for client, res in results:
-                seq_id = self._get_sequential_id(client.cid)
+            for idx, (client, res) in enumerate(results):
                 client_metrics.append({
-                    "client_id": seq_id,
+                    "client_id": idx,
                     "accuracy": res.metrics.get("accuracy", 0.0) if res.metrics else 0.0,
                     "loss": float(res.loss)
                 })
