@@ -40,6 +40,7 @@ export default function ClientDashboard() {
   const [progress, setProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Column-selection state
@@ -65,6 +66,10 @@ export default function ClientDashboard() {
           setDynamicRounds(data.roundsTrained);
           setDynamicLabels(data.curve.map((_: number, i: number) => `Round ${i + 1}`));
         }
+        // Auto-select the "selected" file from backend
+        const primary = data.recentUploads.find(f => (f as any).selected);
+        if (primary) setSelectedFile(primary.name);
+        else if (data.recentUploads.length > 0) setSelectedFile(data.recentUploads[0].name);
       } catch (e) {
         console.error("Failed to fetch live client metrics", e);
       }
@@ -443,10 +448,26 @@ export default function ClientDashboard() {
                   <p className="text-xs dark:text-slate-500 text-slate-400 py-2">No files uploaded yet</p>
                 )}
                 {(personalData?.recentUploads ?? []).map((f) => (
-                  <div key={f.name} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[.03] transition-colors">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-400 text-xs">CSV</div>
+                  <div
+                    key={f.name}
+                    onClick={() => setSelectedFile(f.name)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all cursor-pointer ${selectedFile === f.name
+                        ? 'bg-blue-500/20 border border-blue-500/30'
+                        : 'hover:bg-white/[.03] border border-transparent'
+                      }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${selectedFile === f.name ? 'bg-blue-500 text-white' : 'bg-blue-500/15 text-blue-400'
+                      }`}>
+                      {selectedFile === f.name ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : 'CSV'}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs dark:text-slate-300 text-slate-700 font-medium truncate">{f.name}</div>
+                      <div className={`text-xs font-medium truncate ${selectedFile === f.name ? 'text-blue-400' : 'dark:text-slate-300 text-slate-700'}`}>
+                        {f.name}
+                      </div>
                       <div className="text-[10px] dark:text-slate-500 text-slate-400">{f.size} · {f.rows.toLocaleString()} rows</div>
                     </div>
                     <span className="text-[10px] dark:text-slate-600 text-slate-400">{f.date}</span>
@@ -510,7 +531,7 @@ export default function ClientDashboard() {
 
               <button
                 onClick={startTraining}
-                disabled={status === 'training' || status === 'uploading'}
+                disabled={status === 'training' || status === 'uploading' || !selectedFile}
                 className={`w-full py-3.5 rounded-xl font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${status === 'complete'
                   ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-xl hover:shadow-emerald-500/20'
                   : 'bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30'
@@ -533,6 +554,12 @@ export default function ClientDashboard() {
                   </span>
                 )}
               </button>
+
+              {!selectedFile && status !== 'training' && status !== 'complete' && status !== 'uploading' && (
+                <p className="text-xs text-amber-500 text-center mt-3 font-medium">
+                  Please upload and select a CSV dataset to enable training.
+                </p>
+              )}
             </div>
 
             {/* Quick info */}
