@@ -12,15 +12,18 @@ from typing import Any, Dict, List, Optional
 
 import psycopg
 from psycopg.rows import dict_row
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Connection string ─────────────────────────────────────────────────
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://neondb_owner:npg_ZjRD8BaUCK5d@ep-sweet-moon-ai22usay-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require",
+    "postgresql://neondb_owner:npg_ZjRD8BaUCK5d@ep-sweet-moon-ai22usay-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
 )
 
 # ── Persistent connection (reuse across requests) ─────────────────────
-_conn: psycopg.Connection | None = None
+_conn: Optional[psycopg.Connection] = None
 
 
 def _get_conn() -> psycopg.Connection:
@@ -172,6 +175,17 @@ MIGRATIONS = [
             ALTER TABLE fl_metrics ADD CONSTRAINT fl_metrics_round_unique UNIQUE (round);
         END IF;
     END $$;
+    """,
+    # 7 — client_datasets (raw data for local training)
+    """
+    CREATE TABLE IF NOT EXISTS client_datasets (
+        id          SERIAL PRIMARY KEY,
+        client_id   TEXT NOT NULL,
+        text        TEXT NOT NULL,
+        label       INT NOT NULL,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_datasets_cid ON client_datasets(client_id);
     """,
 ]
 
@@ -399,9 +413,25 @@ def get_attack_events(limit: int = 50) -> List[Dict]:
 
 
 def seed_initial_data():
-    """Seed demo attack events and email logs if tables are empty."""
+    """Seed demo attack events, email logs, and default users if tables are empty."""
     with get_db() as conn:
         cur = conn.cursor()
+
+        # Seed default users
+        cur.execute("SELECT COUNT(*) AS cnt FROM users")
+        if cur.fetchone()["cnt"] == 0:
+            from src.auth import hash_password
+            admin_pw = hash_password("admin123")
+            client_pw = hash_password("client123")
+            cur.execute(
+                """INSERT INTO users (email, name, password, role, org, avatar)
+                   VALUES (%s, %s, %s, %s, %s, %s),
+                          (%s, %s, %s, %s, %s, %s)""",
+                (
+                    "admin@example.com", "Admin User", admin_pw, "admin", "Admin Org", "AD",
+                    "client@example.com", "Client User", client_pw, "client", "Client Org", "CL"
+                )
+            )
 
         # Seed attack events
         cur.execute("SELECT COUNT(*) AS cnt FROM attack_events")
@@ -441,7 +471,7 @@ def seed_initial_data():
 #  Client Uptimes  (derived from fl_metrics)
 # ══════════════════════════════════════════════════════════════════════
 
-def get_client_uptimes_db(history: list | None = None, client_ids: list | None = None) -> Dict[str, float]:
+def get_client_uptimes_db(history: Optional[list] = None, client_ids: Optional[list] = None) -> Dict[str, float]:
     """Return uptime % per client, derived from actual participation across FL rounds."""
     if history is None:
         history = get_all_fl_metrics()
@@ -473,3 +503,50 @@ def get_client_uptimes_db(history: list | None = None, client_ids: list | None =
     for short, count in participation.items():
         uptimes[short] = round(count / total_rounds * 100, 1)
     return uptimes
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Client Datasets (Raw data storage)
+# ══════════════════════════════════════════════════════════════════════
+
+def save_client_dataset(client_id: str, df: Any):
+    """
+    Save a pandas DataFrame to client_datasets table.
+    Uses fast_executemany style for performance with large datasets.
+    """
+    # Clean previous data for this client to avoid duplicates
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM client_datasets WHERE client_id = %s", (client_id,))
+        
+        # Prepare data for batch insert
+        data = []
+        for _, row in df.iterrows():
+            data.append((client_id, str(row["text"]), int(row["label"])))
+        
+        # Batch insert
+        with cur.copy("COPY client_datasets (client_id, text, label) FROM STDIN") as copy:
+            for row in data:
+                copy.write_row(row)
+    
+    print(f"[DB] Saved {len(df)} rows for client {client_id}")
+
+
+def get_client_dataset(client_id: str, limit: int = 1000) -> List[Dict]:
+    """Retrieve raw dataset records for a specific client."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT text, label FROM client_datasets WHERE client_id = %s LIMIT %s",
+            (client_id, limit)
+        )
+        return cur.fetchall()
+
+
+def get_client_dataset_stats() -> Dict[str, int]:
+    """Return row counts per client_id."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT client_id, COUNT(*) as cnt FROM client_datasets GROUP BY client_id")
+        rows = cur.fetchall()
+        return {r["client_id"]: r["cnt"] for r in rows}
