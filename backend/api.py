@@ -429,11 +429,10 @@ async def upload_preview(file: UploadFile = File(...), user: dict = Depends(get_
 async def upload_file(
     client_id: str = Form(...),
     staging_id: str = Form(...),
-    text_column: str = Form(...),
-    label_column: str = Form(...),
+    selected_columns: str = Form(""),
     user: dict = Depends(get_current_user),
 ):
-    """Finalize upload: rename user-chosen columns to 'text'/'label' and save."""
+    """Finalize upload: auto-detect text/label columns from selected columns and save."""
     import shutil, pandas as pd
 
     staging_dir = os.path.join(os.path.dirname(__file__), "data", "staging")
@@ -455,23 +454,37 @@ async def upload_file(
             os.unlink(tmp_path)
             raise HTTPException(status_code=400, detail="Could not decode CSV")
 
-        if text_column not in df.columns:
+        # Filter to selected columns if provided
+        if selected_columns.strip():
+            try:
+                cols = json.loads(selected_columns)
+                missing = [c for c in cols if c not in df.columns]
+                if missing:
+                    os.unlink(tmp_path)
+                    raise HTTPException(status_code=400, detail=f"Columns not found: {missing}")
+                df = df[cols]
+            except json.JSONDecodeError:
+                os.unlink(tmp_path)
+                raise HTTPException(status_code=400, detail="Invalid selected_columns JSON")
+
+        # Auto-detect text column: string column with longest average length
+        str_cols = [c for c in df.columns if df[c].dtype == object]
+        if not str_cols:
             os.unlink(tmp_path)
-            raise HTTPException(status_code=400, detail=f"Column '{text_column}' not found")
-        if label_column not in df.columns:
+            raise HTTPException(status_code=400, detail="No text columns detected in the dataset")
+
+        text_col = max(str_cols, key=lambda c: df[c].astype(str).str.len().mean())
+
+        # Auto-detect label column: column with fewest unique values (not the text column)
+        candidate_cols = [c for c in df.columns if c != text_col]
+        if not candidate_cols:
             os.unlink(tmp_path)
-            raise HTTPException(status_code=400, detail=f"Column '{label_column}' not found")
+            raise HTTPException(status_code=400, detail="Need at least 2 columns (text + label)")
+
+        label_col = min(candidate_cols, key=lambda c: df[c].nunique())
 
         # Rename to standard columns the FL pipeline expects
-        df = df.rename(columns={text_column: "text", label_column: "label"})
-
-        # Validate label values are binary
-        if not df["label"].isin([0, 1]).all():
-            os.unlink(tmp_path)
-            raise HTTPException(
-                status_code=400,
-                detail="Label column must contain only 0 (negative) or 1 (positive)",
-            )
+        df = df.rename(columns={text_col: "text", label_col: "label"})
 
         file_path = os.path.join(upload_dir, f"{client_id}.csv")
         df[["text", "label"]].to_csv(file_path, index=False)
@@ -481,7 +494,14 @@ async def upload_file(
         os.unlink(tmp_path)
         raise HTTPException(status_code=400, detail="File is not a valid CSV")
 
-    return {"filename": staging_id, "client_id": client_id, "rows": len(df), "status": "success"}
+    return {
+        "filename": staging_id,
+        "client_id": client_id,
+        "rows": len(df),
+        "status": "success",
+        "detected_text_column": text_col,
+        "detected_label_column": label_col,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -23,10 +23,11 @@ import {
   FiPlay,
   FiClock,
   FiCalendar,
+  FiCheck,
 } from 'react-icons/fi';
 import { fetchClientPersonal } from '../api';
 import type { ClientPersonalData } from '../api';
-import DynamicSchemaPanel from '../components/charts/DynamicSchemaPanel';
+import TrainingHistoryTable from '../components/charts/TrainingHistoryTable';
 import AccuracyHeatmap from '../components/charts/AccuracyHeatmap';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
@@ -42,11 +43,11 @@ export default function ClientDashboard() {
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Column-selection state
+  // Column-selection state (dynamic schema)
   const [preview, setPreview] = useState<UploadPreview | null>(null);
-  const [textCol, setTextCol] = useState('');
-  const [labelCol, setLabelCol] = useState('');
+  const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set());
   const [colError, setColError] = useState<string | null>(null);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
 
   const [dynamicAccuracy, setDynamicAccuracy] = useState<number>(0);
   const [dynamicRounds, setDynamicRounds] = useState<number>(0);
@@ -104,8 +105,7 @@ export default function ClientDashboard() {
     setStatus('uploading');
     setProgress(0);
     setPreview(null);
-    setTextCol('');
-    setLabelCol('');
+    setSelectedCols(new Set());
     setColError(null);
 
     let p = 0;
@@ -119,12 +119,8 @@ export default function ClientDashboard() {
       clearInterval(interval);
       setProgress(100);
       setPreview(result);
-      // Auto-select if common column names exist
-      const cols = result.columns.map(c => c.toLowerCase());
-      const textGuess = result.columns.find((_, i) => ['text', 'sentence', 'review', 'comment', 'content', 'message'].includes(cols[i]));
-      const labelGuess = result.columns.find((_, i) => ['label', 'sentiment', 'target', 'class', 'category'].includes(cols[i]));
-      if (textGuess) setTextCol(textGuess);
-      if (labelGuess) setLabelCol(labelGuess);
+      // Select all columns by default
+      setSelectedCols(new Set(result.columns));
       setStatus('idle');
     } catch (error: unknown) {
       clearInterval(interval);
@@ -135,15 +131,14 @@ export default function ClientDashboard() {
 
   const handleConfirmColumns = async () => {
     if (!preview) return;
-    if (!textCol || !labelCol) { setColError('Select both a text column and a label column'); return; }
-    if (textCol === labelCol) { setColError('Text and label columns must be different'); return; }
+    if (selectedCols.size < 2) { setColError('Select at least 2 columns (text + label)'); return; }
     setColError(null);
     setStatus('uploading');
     setProgress(50);
 
     try {
       const storeName = user?.org || 'default';
-      await finalizeUpload(storeName, preview.stagingId, textCol, labelCol);
+      await finalizeUpload(storeName, preview.stagingId, Array.from(selectedCols));
       setProgress(100);
       setPreview(null);
       // Refresh personal data
@@ -155,6 +150,30 @@ export default function ClientDashboard() {
       setColError(error instanceof Error ? error.message : 'Save failed');
       setStatus('idle');
     }
+  };
+
+  const toggleColumn = (col: string) => {
+    setSelectedCols(prev => {
+      const next = new Set(prev);
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
+      return next;
+    });
+  };
+
+  const detectColType = (col: string): string => {
+    if (!preview) return 'text';
+    const values = preview.preview.map(row => row[col]);
+    const allNumbers = values.every(v => v !== null && v !== '' && !isNaN(Number(v)));
+    if (allNumbers) {
+      const nums = values.map(Number);
+      const unique = new Set(nums);
+      if (unique.size <= 5) return 'category';
+      return 'number';
+    }
+    const uniqueStrs = new Set(values.map(String));
+    if (uniqueStrs.size <= 5 && values.length > 2) return 'category';
+    return 'text';
   };
 
   const [trainMsg, setTrainMsg] = useState<string>('');
@@ -192,7 +211,8 @@ export default function ClientDashboard() {
           setTrainMsg('Training complete — model aggregated!');
           setStatus('complete');
           fireConfetti();
-          // Refresh personal data to show new accuracy
+          // Refresh personal data and training history
+          setHistoryRefresh(prev => prev + 1);
           try {
             const data = await fetchClientPersonal();
             setPersonalData(data);
@@ -352,7 +372,7 @@ export default function ClientDashboard() {
               </div>
             )}
 
-            {/* Step 2: Column selector (show when preview is ready) */}
+            {/* Step 2: Dynamic Schema — column selector (show when preview is ready) */}
             {preview && status !== 'uploading' && (
               <div className="space-y-4 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -368,58 +388,59 @@ export default function ClientDashboard() {
                   </button>
                 </div>
 
-                {/* Preview table */}
-                <div className="overflow-x-auto rounded-xl border border-white/5">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="dark:bg-slate-800/60 bg-slate-100">
-                        {preview.columns.map((col) => (
-                          <th key={col} className="px-3 py-2 text-left font-medium dark:text-slate-300 text-slate-700 whitespace-nowrap">{col}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.preview.slice(0, 3).map((row, i) => (
-                        <tr key={i} className="border-t border-white/5">
-                          {preview.columns.map((col) => (
-                            <td key={col} className="px-3 py-1.5 dark:text-slate-400 text-slate-500 truncate max-w-[180px]">
-                              {String(row[col] ?? '')}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Column selectors */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium dark:text-slate-400 text-slate-500 mb-1.5">Text Column</label>
-                    <select
-                      value={textCol}
-                      onChange={(e) => setTextCol(e.target.value)}
-                      className="w-full rounded-xl px-3 py-2.5 text-sm dark:bg-slate-800/80 bg-white border border-white/10 dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
-                    >
-                      <option value="">Select column…</option>
-                      {preview.columns.map((col) => (
-                        <option key={col} value={col}>{col}</option>
-                      ))}
-                    </select>
+                {/* Dynamic Schema — column selection */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold dark:text-slate-300 text-slate-700 flex items-center gap-1.5">
+                      <FiDatabase className="w-3.5 h-3.5 text-cyan-400" /> Dataset Schema
+                    </h4>
+                    <span className="text-[10px] dark:text-slate-500 text-slate-400">
+                      {selectedCols.size}/{preview.columns.length} selected
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium dark:text-slate-400 text-slate-500 mb-1.5">Label Column</label>
-                    <select
-                      value={labelCol}
-                      onChange={(e) => setLabelCol(e.target.value)}
-                      className="w-full rounded-xl px-3 py-2.5 text-sm dark:bg-slate-800/80 bg-white border border-white/10 dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
-                    >
-                      <option value="">Select column…</option>
-                      {preview.columns.map((col) => (
-                        <option key={col} value={col}>{col}</option>
-                      ))}
-                    </select>
+                  <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
+                    {preview.columns.map((col) => {
+                      const colType = detectColType(col);
+                      const isSelected = selectedCols.has(col);
+                      const sampleVal = preview.preview[0]?.[col];
+                      return (
+                        <div
+                          key={col}
+                          onClick={() => toggleColumn(col)}
+                          className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-violet-500/10 border-violet-500/30 hover:bg-violet-500/15'
+                              : 'bg-white/[.02] border-white/[.05] hover:bg-white/[.05] opacity-50'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected ? 'bg-violet-500 text-white' : 'bg-white/[.06] dark:text-slate-600 text-slate-400'
+                          }`}>
+                            {isSelected && <FiCheck size={12} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-mono font-semibold dark:text-white text-slate-900">{col}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                colType === 'text' ? 'bg-blue-500/10 text-blue-400'
+                                  : colType === 'number' ? 'bg-emerald-500/10 text-emerald-400'
+                                    : 'bg-amber-500/10 text-amber-400'
+                              }`}>
+                                {colType}
+                              </span>
+                            </div>
+                            <span className="text-[11px] dark:text-slate-500 text-slate-400 truncate block">
+                              {sampleVal != null ? String(sampleVal).slice(0, 60) : '—'}
+                              {String(sampleVal ?? '').length > 60 ? '…' : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                  <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-2 flex items-center gap-1">
+                    Text &amp; label columns are auto-detected from your selection
+                  </p>
                 </div>
 
                 {colError && (
@@ -428,7 +449,7 @@ export default function ClientDashboard() {
 
                 <button
                   onClick={handleConfirmColumns}
-                  disabled={!textCol || !labelCol}
+                  disabled={selectedCols.size < 2 || status === 'uploading'}
                   className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-violet-600 to-pink-600 hover:shadow-xl hover:shadow-violet-500/30 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                 >
                   Confirm & Start Training
@@ -588,6 +609,11 @@ export default function ClientDashboard() {
         {/* Accuracy Heatmap - The only allowed advanced visualization */}
         <div className={`transition-all duration-1000 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <AccuracyHeatmap />
+        </div>
+
+        {/* Training History Table */}
+        <div className={`mt-6 transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <TrainingHistoryTable refreshTrigger={historyRefresh} />
         </div>
       </main>
     </div>

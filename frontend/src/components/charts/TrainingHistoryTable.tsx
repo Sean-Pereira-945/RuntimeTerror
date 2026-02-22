@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { fetchHistory, fetchClients } from '../../api';
 import type { TrainingRound, Client } from '../../data/mockData';
 
-export default function TrainingHistoryTable() {
+interface Props {
+  refreshTrigger?: number;
+}
+
+export default function TrainingHistoryTable({ refreshTrigger = 0 }: Props) {
   const [trainingHistory, setTrainingHistory] = useState<TrainingRound[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
     fetchHistory().then(res => setTrainingHistory(res.trainingHistory || []));
     fetchClients().then(res => setClients(res.clients || []));
-  }, []);
+  }, [refreshTrigger]);
 
   return (
     <div className="rounded-2xl glass p-5 sm:p-6">

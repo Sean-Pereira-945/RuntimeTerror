@@ -143,14 +143,12 @@ export async function uploadPreview(file: File): Promise<UploadPreview> {
 export async function finalizeUpload(
     clientId: string,
     stagingId: string,
-    textColumn: string,
-    labelColumn: string,
+    selectedColumns: string[],
 ) {
     const formData = new FormData();
     formData.append('client_id', clientId);
     formData.append('staging_id', stagingId);
-    formData.append('text_column', textColumn);
-    formData.append('label_column', labelColumn);
+    formData.append('selected_columns', JSON.stringify(selectedColumns));
 
     const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',

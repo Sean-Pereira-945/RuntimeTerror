@@ -36,6 +36,7 @@ export default function AdminDashboard() {
   const [trainStatus, setTrainStatus] = useState<TrainingStatus>({ status: 'idle' });
   const [trainProgress, setTrainProgress] = useState(0);
   const [trainMsg, setTrainMsg] = useState('');
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshDashData = useCallback(() => {
@@ -74,8 +75,9 @@ export default function AdminDashboard() {
           if (pollRef.current) clearInterval(pollRef.current);
           setTrainProgress(100);
           setTrainMsg('Training complete — model aggregated!');
-          // Auto-refresh dashboard data
+          // Auto-refresh dashboard data + history table
           refreshDashData();
+          setHistoryRefresh(prev => prev + 1);
         } else if (st.status === 'failed') {
           if (pollRef.current) clearInterval(pollRef.current);
           setTrainMsg(st.message ?? 'Training failed');
@@ -319,7 +321,7 @@ export default function AdminDashboard() {
             {/* Training History Table */}
             <div className={`transition-all duration-1100 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
               <div className="animate-fade-in" style={{ animationDelay: '1100ms' }}>
-                <TrainingHistoryTable />
+                <TrainingHistoryTable refreshTrigger={historyRefresh} />
               </div>
             </div>
           </>
